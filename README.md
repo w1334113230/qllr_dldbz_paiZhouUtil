@@ -5,6 +5,9 @@
 用于录入角色、回合行动、收益效果并可视化排轴的前端小工具。  
 项目为纯前端页面，无后端依赖，数据保存在浏览器本地并支持导入/导出。
 
+## 快速使用
+https://w1334113230.github.io/qllr_dldbz_paiZhouUtil/paiZhouUtil/index.html
+
 ## 项目结构
 
 - `paiZhouUtil/index.html`：页面结构
