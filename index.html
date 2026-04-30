@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>大陆的霸者 · 排轴工具</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <div class="top-bar">
+      <div class="title-stack">
+        <h1 class="page-title">大陆的霸者排轴</h1>
+        <div class="team-meta">
+          <div class="team-meta-row">
+            <span class="team-meta-label">队伍名</span>
+            <span id="teamNameText" class="team-meta-text">未设置</span>
+            <button type="button" class="btn-secondary team-meta-edit" data-meta="teamName" aria-label="编辑队伍名">
+              <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false">
+                <path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.04a1.003 1.003 0 0 0 0-1.42l-2.34-2.34a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z"/>
+              </svg>
+            </button>
+            <input
+              id="teamNameInput"
+              name="teamName"
+              type="text"
+              maxlength="30"
+              placeholder="可填写队伍名"
+              class="team-meta-field team-meta-input is-hidden"
+            />
+          </div>
+          <div class="team-meta-row team-meta-row--note">
+            <span class="team-meta-label">备注</span>
+            <span id="teamNoteText" class="team-meta-text team-meta-text--note">未设置</span>
+            <button type="button" class="btn-secondary team-meta-edit" data-meta="teamNote" aria-label="编辑备注">
+              <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false">
+                <path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.04a1.003 1.003 0 0 0 0-1.42l-2.34-2.34a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z"/>
+              </svg>
+            </button>
+            <textarea
+              id="teamNoteInput"
+              name="teamNote"
+              maxlength="200"
+              rows="2"
+              placeholder="可填写备注（用于导出/提醒）"
+              class="team-meta-field team-meta-textarea is-hidden"
+            ></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="top-actions">
+        <button type="button" id="resetBtn" class="btn-secondary">重置</button>
+        <button type="button" id="exportBtn" class="btn-secondary">导出数据</button>
+        <button type="button" id="importBtn" class="btn-secondary">导入数据</button>
+        <input type="file" id="importInput" accept="application/json,.json" class="is-hidden" />
+      </div>
+    </div>
+    <div class="content-row">
+      <div class="left-column">
+        <section class="panel panel--buff-grid" aria-label="Buff 编排区">
+          <div class="buff-grid" id="buffGrid">
+            <div class="buff-col-hd buff-col-hd--blank" aria-hidden="true"></div>
+            <div class="buff-col-hd">主动区</div>
+            <div class="buff-col-hd">被动区</div>
+            <div class="buff-col-hd">必杀区</div>
+            <div class="buff-col-hd">支炎兽</div>
+
+            <div class="buff-row-hd buff-row-hd--up"><span class="row-arrow row-arrow--up"></span><span class="buff-row-hd-text">攻击</span></div>
+            <div class="buff-cell" data-max="30" data-cell-id="atk:active"><div class="buff-cell-track"></div></div>
+            <div class="buff-cell" data-max="30" data-cell-id="atk:passive"><div class="buff-cell-track"></div></div>
+            <div class="buff-cell" data-max="30" data-cell-id="atk:ult"><div class="buff-cell-track"></div></div>
+            <div class="buff-cell" data-max="30" data-cell-id="atk:summon"><div class="buff-cell-track"></div></div>
+
+            <div class="buff-row-hd buff-row-hd--down"><span class="row-arrow row-arrow--down"></span><span class="buff-row-hd-text">防御</span></div>
+            <div class="buff-cell" data-max="30" data-cell-id="def:active"><div class="buff-cell-track"></div></div>
+            <div class="buff-cell" data-max="30" data-cell-id="def:passive"><div class="buff-cell-track"></div></div>
+            <div class="buff-cell" data-max="30" data-cell-id="def:ult"><div class="buff-cell-track"></div></div>
+            <div class="buff-cell" data-max="30" data-cell-id="def:summon"><div class="buff-cell-track"></div></div>
+
+            <div class="buff-row-hd buff-row-hd--up"><span class="row-arrow row-arrow--up"></span><span class="buff-row-hd-text">伤害</span></div>
+            <div class="buff-cell" data-max="30" data-cell-id="dmg:active"><div class="buff-cell-track"></div></div>
+            <div class="buff-cell" data-max="30" data-cell-id="dmg:passive"><div class="buff-cell-track"></div></div>
+            <div class="buff-cell" data-max="30" data-cell-id="dmg:ult"><div class="buff-cell-track"></div></div>
+            <div class="buff-cell" data-max="30" data-cell-id="dmg:summon"><div class="buff-cell-track"></div></div>
+
+            <div class="buff-row-hd buff-row-hd--down"><span class="row-arrow row-arrow--down"></span><span class="buff-row-hd-text">耐性</span></div>
+            <div class="buff-cell" data-max="30" data-cell-id="res:active"><div class="buff-cell-track"></div></div>
+            <div class="buff-cell" data-max="30" data-cell-id="res:passive"><div class="buff-cell-track"></div></div>
+            <div class="buff-cell" data-max="30" data-cell-id="res:ult"><div class="buff-cell-track"></div></div>
+            <div class="buff-cell" data-max="30" data-cell-id="res:summon"><div class="buff-cell-track"></div></div>
+          </div>
+        </section>
+
+        <section class="panel panel--extra">
+          <div class="extra-row">
+            <div class="stat-box"><span class="stat-label">威力</span><div class="stat-inner"><span class="stat-value" id="statPower">0%</span></div></div>
+            <div class="stat-box"><span class="stat-label">上限</span><div class="stat-inner"><span class="stat-value" id="statCap">0w</span></div></div>
+            <div class="stat-box"><span class="stat-label">回豆</span><div class="stat-inner"><span class="stat-value" id="statBean">0</span></div></div>
+            <div class="stat-box"><span class="stat-label">必杀槽</span><div class="stat-inner"><span class="stat-value" id="statUlt">0%</span></div></div>
+            <div class="stat-box"><span class="stat-label">必暴</span><div class="stat-inner"><span class="stat-value" id="statCrit">否</span></div></div>
+            <div class="stat-box"><span class="stat-label">破盾量</span><div class="stat-inner"><span class="stat-value" id="statBreak">0</span></div></div>
+          </div>
+        </section>
+      </div>
+
+      <section class="panel panel--party" id="partyPanel">
+        <header class="party-header">
+          <span class="party-header-front">前卫列表</span>
+          <span class="party-header-back">后卫列表</span>
+        </header>
+        <div class="party-grid" id="partyGrid"></div>
+        <section class="turn-filter">
+          <div class="turn-filter-title">按回合展示</div>
+          <div class="turn-filter-slots" id="turnFilterSlots"></div>
+        </section>
+      </section>
+    </div>
+  </div>
+
+  <div class="modal-backdrop is-hidden" id="skillModal">
+    <form class="skill-form" id="skillForm">
+      <div class="modal-title-row">
+        <h2 class="modal-title" id="modalTitle">技能录入</h2>
+        <div class="modal-view-toggle is-hidden" id="turnViewToggle">
+          <button type="button" class="view-toggle-btn is-active" data-view="detailed">详细</button>
+          <button type="button" class="view-toggle-btn" data-view="simple">简洁</button>
+        </div>
+      </div>
+      <div class="turn-badge-wrap" id="turnBadgeWrap">
+        <span class="turn-badge-label">发动回合</span>
+        <span class="turn-badge-value" id="turnBadgeValue">-</span>
+      </div>
+      <div class="form-grid form-grid--row1" id="basicFieldsWrap">
+        <label id="charNameField">角色名<input name="charName" required maxlength="20" /></label>
+        <label id="charNoteField">备注<input name="charNote" maxlength="80" placeholder="可填写角色备注" /></label>
+        <div id="avatarField" class="avatar-field is-hidden">
+          <span>头像图片</span>
+          <div class="avatar-picker-row">
+            <button type="button" id="avatarPickBtn" class="btn-secondary">选择图片</button>
+            <span class="avatar-paste-tip">或直接粘贴截图</span>
+          </div>
+          <input type="file" id="avatarInput" accept="image/*" class="is-hidden" />
+          <div class="avatar-preview" id="avatarPreview">在这粘贴</div>
+        </div>
+      </div>
+      <section class="char-extra is-hidden" id="charExtraSection">
+        <button type="button" class="char-extra-toggle" id="charExtraToggle" aria-expanded="false">
+          <span class="char-extra-line"></span>
+          <span class="char-extra-arrow">▾</span>
+        </button>
+        <div class="char-extra-body is-hidden" id="charExtraBody">
+          <div class="form-grid form-grid--char-extra">
+            <label>武器<input name="gearWeapon" maxlength="40" /></label>
+            <label>头盔<input name="gearHelmet" maxlength="40" /></label>
+            <label>防具<input name="gearArmor" maxlength="40" /></label>
+            <label>饰品 1<input name="gearAcc1" maxlength="40" /></label>
+            <label>饰品 2<input name="gearAcc2" maxlength="40" /></label>
+            <label>饰品 3<input name="gearAcc3" maxlength="40" /></label>
+            <label>技能 1<input name="gearSkill1" maxlength="40" /></label>
+            <label>技能 2<input name="gearSkill2" maxlength="40" /></label>
+            <label>技能 3<input name="gearSkill3" maxlength="40" /></label>
+            <label>技能 4<input name="gearSkill4" maxlength="40" /></label>
+          </div>
+        </div>
+      </section>
+      <div class="form-grid form-grid--row2" id="actionRow2">
+        <label id="skillTypeField">技能类型
+          <select name="skillType">
+            <option value="active">主动</option>
+            <option value="ex">EX</option>
+            <option value="ult">必杀</option>
+          </select>
+        </label>
+        <label id="skillNameField">技能名<input name="skillName" required maxlength="30" /></label>
+        <label id="bpField">BP
+          <select name="bp">
+            <option value="0" selected>0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+          </select>
+        </label>
+        <label id="shieldBreakField">破盾量<input name="shieldBreak" type="number" step="1" min="0" /></label>
+      </div>
+      <div class="form-grid form-grid--row3" id="actionRow3">
+        <label>发动支炎兽
+          <select name="summonEnabled">
+            <option value="false">否</option>
+            <option value="true">是</option>
+          </select>
+        </label>
+        <label id="summonField">支炎兽名<input name="summonName" maxlength="30" /></label>
+        <label>BP
+          <select name="summonBp">
+            <option value="0" selected>0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+          </select>
+        </label>
+        <label>破盾量<input name="summonBreak" type="number" step="1" min="0" /></label>
+      </div>
+      <div class="form-grid form-grid--row4" id="actionRow4">
+        <label>发动底力
+          <select name="gutsEnabled">
+            <option value="false" selected>否</option>
+            <option value="true">是</option>
+          </select>
+        </label>
+        <label>切换状态
+          <select name="stateSwitchEnabled">
+            <option value="false" selected>否</option>
+            <option value="true">是</option>
+          </select>
+        </label>
+      </div>
+      <div class="effect-header" id="effectHeader">
+        <span>效果条目</span>
+        <button type="button" id="addEffectBtn" class="btn-inline">+ 添加行</button>
+      </div>
+      <div id="effectsRows" class="effects-rows"></div>
+
+      <div class="form-grid form-grid--stats" id="statsFieldsWrap">
+        <label>威力<input name="power" type="number" step="0.1" /><span class="unit">%</span></label>
+        <label>上限<input name="upper" type="number" step="0.1" /><span class="unit">万</span></label>
+        <label>回豆<input name="bean" type="number" step="1" /></label>
+        <label>必杀槽<input name="ultGauge" type="number" step="0.1" /><span class="unit">%</span></label>
+        <label>必暴
+          <select name="crit">
+            <option value="false">否</option>
+            <option value="true">是</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="form-grid form-grid--row5" id="actionRow5">
+        <label>发动追击
+          <select name="chaseEnabled">
+            <option value="false">否</option>
+            <option value="true">是</option>
+          </select>
+        </label>
+        <label>破盾量<input name="chaseBreak" type="number" step="1" min="0" /></label>
+      </div>
+
+      <p class="form-error" id="formError"></p>
+      <div class="form-actions">
+        <button type="button" id="resetCellBtn" class="btn-delete is-hidden">重置该格</button>
+        <button type="button" id="cancelSkillBtn" class="btn-secondary">取消</button>
+        <button type="submit" class="btn-primary">保存</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="cap-editor-backdrop is-hidden" id="capEditorBackdrop">
+    <div class="cap-editor">
+      <h3 class="cap-editor-title">设置上限</h3>
+      <label class="cap-editor-label">
+        上限值（%）
+        <input id="capEditorInput" type="number" min="1" step="0.1" />
+      </label>
+      <div class="cap-editor-actions">
+        <button type="button" id="capEditorCancel" class="btn-secondary">取消</button>
+        <button type="button" id="capEditorSave" class="btn-primary">确定</button>
+      </div>
+    </div>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
