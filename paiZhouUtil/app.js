@@ -1559,6 +1559,7 @@
 
     err.textContent = "";
     rows.innerHTML = "";
+    hideCharNameSuggest();
 
     var char = ensureChar(idx);
     var skill = mode === "passive" ? char.passiveSkill : char.turns[turn];
@@ -1701,11 +1702,15 @@
     syncSkillNameRequirement(form, mode);
     syncEffectRowsByForm(form, mode);
     modal.classList.remove("is-hidden");
+    loadWikiAvatarsOnce().then(function () {
+      if (mode === "char") tryWikiAvatarFromCharNameInput(form);
+    });
   }
 
   function closeModal() {
     var modal = document.getElementById("skillModal");
     if (modal) modal.classList.add("is-hidden");
+    hideCharNameSuggest();
   }
 
   function setAvatarPreview(dataUrl) {
@@ -1782,6 +1787,11 @@
       done("");
       return;
     }
+    var s = String(dataUrl);
+    if (/^https?:\/\//i.test(s)) {
+      done(s);
+      return;
+    }
     var img = new Image();
     img.onload = function () {
       var w = img.naturalWidth || img.width;
@@ -1836,6 +1846,154 @@
       done(dataUrl);
     };
     img.src = dataUrl;
+  }
+
+  /** Wiki 头像库 byName，加载失败时为 null */
+  var wikiAvatarByName = null;
+  var wikiAvatarsLoadPromise = null;
+  var wikiCharNameKeys = null;
+
+  function ingestWikiAvatarsPayload(data) {
+    var by = data && data.byName && typeof data.byName === "object" ? data.byName : {};
+    wikiAvatarByName = by;
+    wikiCharNameKeys = Object.keys(by).sort(function (a, b) {
+      return a.localeCompare(b, "zh-Hans-CN");
+    });
+    return by;
+  }
+
+  /** 与 index.html 同目录的 JSON（http(s) 部署时可选拷贝，便于单目录托管） */
+  function wikiAvatarsFetchUrls() {
+    var list = [];
+    try {
+      list.push(new URL("./wiki_avatars.min.json", window.location.href).href);
+    } catch (e1) {}
+    try {
+      list.push(new URL("../avatar/wiki_avatars.min.json", window.location.href).href);
+    } catch (e2) {}
+    return list;
+  }
+
+  function fetchWikiAvatarsJsonSequential(urls, idx) {
+    if (idx >= urls.length) return Promise.reject(new Error("wiki json"));
+    return fetch(urls[idx])
+      .then(function (res) {
+        if (!res.ok) throw new Error(String(res.status));
+        return res.json();
+      })
+      .catch(function () {
+        return fetchWikiAvatarsJsonSequential(urls, idx + 1);
+      });
+  }
+
+  /**
+   * 1) wiki_avatars.embed.js 已写入 window.__PAIZHOU_WIKI_AVATARS__ 时直接用（含 file://）。
+   * 2) 否则 http(s) 下按顺序 fetch：同目录 wiki_avatars.min.json → 上级 avatar/。
+   */
+  function loadWikiAvatarsOnce() {
+    if (wikiAvatarsLoadPromise) return wikiAvatarsLoadPromise;
+    var pre = typeof window.__PAIZHOU_WIKI_AVATARS__ === "object" && window.__PAIZHOU_WIKI_AVATARS__;
+    if (pre && typeof pre.byName === "object") {
+      wikiAvatarsLoadPromise = Promise.resolve(ingestWikiAvatarsPayload(pre));
+      return wikiAvatarsLoadPromise;
+    }
+    if (String(window.location.protocol || "").toLowerCase() === "file:") {
+      wikiAvatarByName = null;
+      wikiCharNameKeys = null;
+      wikiAvatarsLoadPromise = Promise.resolve(null);
+      return wikiAvatarsLoadPromise;
+    }
+    var urls = wikiAvatarsFetchUrls();
+    if (!urls.length) {
+      wikiAvatarByName = null;
+      wikiCharNameKeys = null;
+      wikiAvatarsLoadPromise = Promise.resolve(null);
+      return wikiAvatarsLoadPromise;
+    }
+    wikiAvatarsLoadPromise = fetchWikiAvatarsJsonSequential(urls, 0)
+      .then(ingestWikiAvatarsPayload)
+      .catch(function () {
+        wikiAvatarByName = null;
+        wikiCharNameKeys = null;
+        return null;
+      });
+    return wikiAvatarsLoadPromise;
+  }
+
+  function getWikiAvatarRowForName(name) {
+    var n = String(name || "").trim();
+    if (!n || !wikiAvatarByName) return null;
+    var row = wikiAvatarByName[n];
+    if (!row || typeof row.avatar !== "string" || !row.avatar.trim()) return null;
+    return row;
+  }
+
+  function hideCharNameSuggest() {
+    var ul = document.getElementById("charNameSuggest");
+    if (!ul) return;
+    ul.classList.add("is-hidden");
+    ul.innerHTML = "";
+  }
+
+  function filterWikiCharNamesForSuggest(query, limit) {
+    var lim = typeof limit === "number" ? limit : 30;
+    var q = String(query || "").trim();
+    if (!wikiCharNameKeys || !wikiCharNameKeys.length) return [];
+    if (!q) return wikiCharNameKeys.slice(0, lim);
+    var lower = q.toLowerCase();
+    var hits = [];
+    var i;
+    for (i = 0; i < wikiCharNameKeys.length; i += 1) {
+      var k = wikiCharNameKeys[i];
+      if (k.indexOf(q) >= 0 || k.toLowerCase().indexOf(lower) >= 0) hits.push(k);
+    }
+    hits.sort(function (a, b) {
+      var ap = a.indexOf(q) === 0 ? 0 : 1;
+      var bp = b.indexOf(q) === 0 ? 0 : 1;
+      if (ap !== bp) return ap - bp;
+      return a.localeCompare(b, "zh-Hans-CN");
+    });
+    return hits.slice(0, lim);
+  }
+
+  function renderCharNameSuggest(query) {
+    var ul = document.getElementById("charNameSuggest");
+    if (!ul || !wikiCharNameKeys) return;
+    var names = filterWikiCharNamesForSuggest(query, 30);
+    ul.innerHTML = "";
+    if (!names.length) {
+      ul.classList.add("is-hidden");
+      return;
+    }
+    names.forEach(function (name) {
+      var li = document.createElement("li");
+      li.className = "char-name-suggest-item";
+      li.setAttribute("role", "option");
+      li.textContent = name;
+      li.dataset.name = name;
+      ul.appendChild(li);
+    });
+    ul.classList.remove("is-hidden");
+  }
+
+  /** 角色录入弹窗：名称与 Wiki 完全一致时用库内头像 URL（不覆盖已有自定义头像） */
+  function tryWikiAvatarFromCharNameInput(form) {
+    if ((state.selected.mode || "") !== "char" || !form || !form.charName) return;
+    var nm = (form.charName.value || "").trim();
+    var row = getWikiAvatarRowForName(nm);
+    if (!row) return;
+    var cur = String(state.modalAvatarData || "").trim();
+    if (cur) return;
+    state.modalAvatarData = row.avatar;
+    setAvatarPreview(row.avatar);
+  }
+
+  /** 保存时：若角色尚无头像且 Wiki 有同名条目，写入 Wiki 头像 URL */
+  function applyWikiAvatarIfCharHasNoAvatar(char) {
+    if (!char || !wikiAvatarByName) return;
+    if (String(char.avatar || "").trim()) return;
+    var row = getWikiAvatarRowForName(char.charName);
+    if (row && row.avatar) char.avatar = row.avatar;
   }
 
   function parseNumber(input, fallback) {
@@ -2302,6 +2460,7 @@
         onlyChar.charName = onlyName;
         onlyChar.charNote = (form.charNote.value || "").trim();
         onlyChar.color = hashColor(onlyName);
+        applyWikiAvatarIfCharHasNoAvatar(onlyChar);
         onlyChar.avatar = state.modalAvatarData || onlyChar.avatar || "";
         onlyChar.gear = {
           weapon: (form.gearWeapon.value || "").trim(),
@@ -2344,6 +2503,7 @@
       var charName = (form.charName.value || "").trim();
       char.charName = charName || "未命名角色";
       char.color = hashColor(char.charName);
+      applyWikiAvatarIfCharHasNoAvatar(char);
       var summonName = (form.summonName.value || "").trim();
       var rawSkillName = (form.skillName.value || "").trim();
       var summonEnabled = form.summonEnabled.value === "true";
@@ -2577,6 +2737,46 @@
         closeCapEditor();
       }
     });
+
+    var charNameInput = document.getElementById("charNameInput");
+    var charNameSuggest = document.getElementById("charNameSuggest");
+    if (charNameInput && charNameSuggest) {
+      var charNameBlurTimer = null;
+      charNameInput.addEventListener("focus", function () {
+        loadWikiAvatarsOnce().then(function () {
+          renderCharNameSuggest(charNameInput.value);
+        });
+      });
+      charNameInput.addEventListener("input", function () {
+        loadWikiAvatarsOnce().then(function () {
+          renderCharNameSuggest(charNameInput.value);
+          var form = document.getElementById("skillForm");
+          if (form && (state.selected.mode || "") === "char") tryWikiAvatarFromCharNameInput(form);
+        });
+      });
+      charNameInput.addEventListener("blur", function () {
+        if (charNameBlurTimer) clearTimeout(charNameBlurTimer);
+        charNameBlurTimer = window.setTimeout(function () {
+          charNameBlurTimer = null;
+          hideCharNameSuggest();
+        }, 200);
+      });
+      charNameSuggest.addEventListener("mousedown", function (e) {
+        var li = e.target.closest(".char-name-suggest-item");
+        if (!li) return;
+        e.preventDefault();
+        var name = (li.dataset && li.dataset.name) || (li.textContent || "").trim();
+        if (!name) return;
+        charNameInput.value = name;
+        var form = document.getElementById("skillForm");
+        if (form && form.charName) form.charName.value = name;
+        hideCharNameSuggest();
+        loadWikiAvatarsOnce().then(function () {
+          if (form) tryWikiAvatarFromCharNameInput(form);
+        });
+      });
+    }
+    loadWikiAvatarsOnce();
   }
 
   document.addEventListener("DOMContentLoaded", function () {

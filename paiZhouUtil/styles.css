@@ -930,6 +930,43 @@ body {
   font-size: 12px;
 }
 
+.char-name-field .char-name-wrap {
+  position: relative;
+  width: 100%;
+  margin-top: 4px;
+}
+
+.char-name-suggest {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  z-index: 60;
+  margin: 4px 0 0;
+  padding: 4px 0;
+  max-height: 220px;
+  overflow: auto;
+  list-style: none;
+  border: 1px solid #5e513e;
+  border-radius: 6px;
+  background: #2a2218;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.char-name-suggest-item {
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #e8dcc8;
+  line-height: 1.35;
+}
+
+.char-name-suggest-item:hover,
+.char-name-suggest-item:focus {
+  background: #3d3225;
+  outline: none;
+}
+
 .avatar-field {
   display: flex;
   flex-direction: column;

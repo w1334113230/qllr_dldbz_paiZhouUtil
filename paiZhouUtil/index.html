@@ -131,7 +131,12 @@
         <span class="turn-badge-value" id="turnBadgeValue">-</span>
       </div>
       <div class="form-grid form-grid--row1" id="basicFieldsWrap">
-        <label id="charNameField">角色名<input name="charName" required maxlength="20" /></label>
+        <label id="charNameField" class="char-name-field">角色名
+          <div class="char-name-wrap">
+            <input id="charNameInput" name="charName" required maxlength="20" autocomplete="off" />
+            <ul id="charNameSuggest" class="char-name-suggest is-hidden" role="listbox" aria-label="角色名候选"></ul>
+          </div>
+        </label>
         <label id="charNoteField">备注<input name="charNote" maxlength="80" placeholder="可填写角色备注" /></label>
         <div id="avatarField" class="avatar-field is-hidden">
           <span>头像图片</span>
@@ -326,6 +331,8 @@
       </div>
     </div>
   </div>
+  <!-- file:// 下无法用 fetch 读本地 JSON；此文件由 npm run wiki-embed 从 avatar/wiki_avatars.min.json 生成 -->
+  <script src="wiki_avatars.embed.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
