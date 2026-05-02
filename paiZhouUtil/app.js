@@ -777,6 +777,10 @@
 
   function openImportDataModal() {
     var backdrop = document.getElementById("shareImportModalBackdrop");
+    if (!backdrop) {
+      console.warn("导入弹窗节点缺失（shareImportModalBackdrop），请确认 index.html 与 app.js 为同一版本并已刷新缓存。");
+      return;
+    }
     var ta = document.getElementById("shareImportTextarea");
     var fi = document.getElementById("shareImportQrFile");
     var fn = document.getElementById("shareImportFileName");
@@ -787,7 +791,7 @@
     if (fn) fn.textContent = "";
     if (jf) jf.value = "";
     if (jn) jn.textContent = "";
-    if (backdrop) backdrop.classList.remove("is-hidden");
+    backdrop.classList.remove("is-hidden");
   }
 
   function closeImportDataModal() {
@@ -2414,21 +2418,34 @@
         alert("复制失败：请手动复制文本框内容。");
       }
     });
-    document.getElementById("shareImportQrFile").addEventListener("change", function (e) {
-      var fn = document.getElementById("shareImportFileName");
-      var f = e.target.files && e.target.files[0];
-      if (fn) fn.textContent = f ? f.name : "";
-    });
-    document.getElementById("importJsonFile").addEventListener("change", function (e) {
-      var jn = document.getElementById("importJsonFileName");
-      var f = e.target.files && e.target.files[0];
-      if (jn) jn.textContent = f ? f.name : "";
-    });
-    document.getElementById("shareImportCancel").addEventListener("click", closeImportDataModal);
-    document.getElementById("shareImportModalBackdrop").addEventListener("click", function (e) {
-      if (e.target.id === "shareImportModalBackdrop") closeImportDataModal();
-    });
-    document.getElementById("shareImportConfirm").addEventListener("click", function () {
+    var shareImportQrFile = document.getElementById("shareImportQrFile");
+    if (shareImportQrFile) {
+      shareImportQrFile.addEventListener("change", function (e) {
+        var fn = document.getElementById("shareImportFileName");
+        var f = e.target.files && e.target.files[0];
+        if (fn) fn.textContent = f ? f.name : "";
+      });
+    }
+    var importJsonFileEl = document.getElementById("importJsonFile");
+    if (importJsonFileEl) {
+      importJsonFileEl.addEventListener("change", function (e) {
+        var jn = document.getElementById("importJsonFileName");
+        var f = e.target.files && e.target.files[0];
+        if (jn) jn.textContent = f ? f.name : "";
+      });
+    }
+    var shareImportCancel = document.getElementById("shareImportCancel");
+    if (shareImportCancel) shareImportCancel.addEventListener("click", closeImportDataModal);
+    var shareImportBackdrop = document.getElementById("shareImportModalBackdrop");
+    if (shareImportBackdrop) {
+      shareImportBackdrop.addEventListener("click", function (e) {
+        if (e.target.id === "shareImportModalBackdrop") closeImportDataModal();
+      });
+    }
+    var shareImportConfirm = document.getElementById("shareImportConfirm");
+    if (!shareImportConfirm) {
+      console.warn("导入确认按钮缺失（shareImportConfirm），请同步部署 index.html。");
+    } else shareImportConfirm.addEventListener("click", function () {
       var jsonIn = document.getElementById("importJsonFile");
       var jsonFile = jsonIn && jsonIn.files && jsonIn.files[0];
       var ta = document.getElementById("shareImportTextarea");
