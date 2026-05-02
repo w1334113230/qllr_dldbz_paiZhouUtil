@@ -37,6 +37,776 @@
     return str || "pai-zhou-data";
   }
 
+  /** 与 index.html 同目录下的 vendor/*.bundle.js（无外网可用；缺失时在仓库根执行 npm run vendor） */
+  var vendorScriptPromises = {};
+  function loadVendorScriptOnce(src, id, globalCheck) {
+    var key = id || src;
+    if (vendorScriptPromises[key]) return vendorScriptPromises[key];
+    vendorScriptPromises[key] = new Promise(function (resolve, reject) {
+      if (typeof globalCheck === "function" && globalCheck()) {
+        resolve();
+        return;
+      }
+      var s = document.createElement("script");
+      if (id) s.id = id;
+      s.async = true;
+      s.src = src;
+      s.onload = function () {
+        if (typeof globalCheck === "function" && !globalCheck()) {
+          reject(new Error("脚本已加载但未注册全局：" + src));
+          return;
+        }
+        resolve();
+      };
+      s.onerror = function () {
+        reject(new Error("无法加载本地脚本：" + src));
+      };
+      document.head.appendChild(s);
+    }).catch(function (err) {
+      delete vendorScriptPromises[key];
+      return Promise.reject(err);
+    });
+    return vendorScriptPromises[key];
+  }
+
+  var qrcodeToDataURLPromise = null;
+  function loadQrCodeToDataURL() {
+    if (!qrcodeToDataURLPromise) {
+      qrcodeToDataURLPromise = loadVendorScriptOnce("vendor/qrcode.bundle.js", "vendor-qrcode", function () {
+        return typeof window.__qrcodeToDataURL === "function";
+      })
+        .then(function () {
+          if (typeof window.__qrcodeToDataURL !== "function") throw new Error("qrcode vendor");
+          return window.__qrcodeToDataURL;
+        })
+        .catch(function (e) {
+          qrcodeToDataURLPromise = null;
+          return Promise.reject(e);
+        });
+    }
+    return qrcodeToDataURLPromise;
+  }
+
+  var jsQrPromise = null;
+  function loadJsQrOnce() {
+    if (!jsQrPromise) {
+      jsQrPromise = loadVendorScriptOnce("vendor/jsqr.bundle.js", "vendor-jsqr", function () {
+        return typeof window.__jsQR === "function";
+      })
+        .then(function () {
+          if (typeof window.__jsQR !== "function") throw new Error("jsQR vendor");
+          return window.__jsQR;
+        })
+        .catch(function (e) {
+          jsQrPromise = null;
+          return Promise.reject(e);
+        });
+    }
+    return jsQrPromise;
+  }
+
+  function loadImageFromFile(file) {
+    return new Promise(function (resolve, reject) {
+      if (!file || !file.type || file.type.indexOf("image/") !== 0) {
+        reject(new Error("请选择图片文件"));
+        return;
+      }
+      var url = URL.createObjectURL(file);
+      var img = new Image();
+      img.onload = function () {
+        URL.revokeObjectURL(url);
+        resolve(img);
+      };
+      img.onerror = function () {
+        URL.revokeObjectURL(url);
+        reject(new Error("图片无法加载"));
+      };
+      img.src = url;
+    });
+  }
+
+  /** 从二维码截图解析出图中编码的字符串（多为完整分享 URL） */
+  async function decodeQrFromImageFile(file) {
+    var jsQR = await loadJsQrOnce();
+    var img = await loadImageFromFile(file);
+    var w = img.naturalWidth || img.width;
+    var h = img.naturalHeight || img.height;
+    if (w < 8 || h < 8) throw new Error("图片尺寸过小");
+
+    var scales = [1, 2, 2.5, 3, 0.65, 0.5];
+    var maxEdge = 1400;
+    for (var si = 0; si < scales.length; si += 1) {
+      var sw = Math.max(32, Math.round(w * scales[si]));
+      var sh = Math.max(32, Math.round(h * scales[si]));
+      if (sw > maxEdge || sh > maxEdge) {
+        var r = Math.min(maxEdge / sw, maxEdge / sh);
+        sw = Math.max(32, Math.round(sw * r));
+        sh = Math.max(32, Math.round(sh * r));
+      }
+      var canvas = document.createElement("canvas");
+      canvas.width = sw;
+      canvas.height = sh;
+      var ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("无法创建画布");
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(img, 0, 0, sw, sh);
+      var imageData = ctx.getImageData(0, 0, sw, sh);
+      var code = jsQR(imageData.data, sw, sh, { inversionAttempts: "attemptBoth" });
+      if (code && code.data) return String(code.data).trim();
+    }
+    throw new Error("未在图中识别到二维码");
+  }
+
+  function utf8ToBytes(str) {
+    return new TextEncoder().encode(String(str || ""));
+  }
+
+  function bytesToBase64Url(bytes) {
+    var bin = "";
+    var chunk = 0x8000;
+    for (var i = 0; i < bytes.length; i += chunk) {
+      bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+    }
+    var b64 = btoa(bin);
+    return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  }
+
+  function base64UrlToBytes(b64url) {
+    var b64 = String(b64url || "").replace(/-/g, "+").replace(/_/g, "/");
+    while (b64.length % 4) b64 += "=";
+    var bin = atob(b64);
+    var out = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i += 1) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+
+  async function gzipBytes(bytes) {
+    if (!window.CompressionStream) return null;
+    var stream = new CompressionStream("gzip");
+    var writer = stream.writable.getWriter();
+    writer.write(bytes);
+    writer.close();
+    var buf = await new Response(stream.readable).arrayBuffer();
+    return new Uint8Array(buf);
+  }
+
+  async function gunzipBytes(bytes) {
+    if (!window.DecompressionStream) return null;
+    var stream = new DecompressionStream("gzip");
+    var writer = stream.writable.getWriter();
+    writer.write(bytes);
+    writer.close();
+    var buf = await new Response(stream.readable).arrayBuffer();
+    return new Uint8Array(buf);
+  }
+
+  function buildSharePayloadV2() {
+    var rosterOut = new Array(8).fill(null);
+    for (var i = 0; i < 8; i += 1) {
+      var ch = state.roster[i] || {};
+      var minimal = null;
+
+      var hasName = !!(ch.charName && String(ch.charName).trim());
+      var hasNote = !!(ch.charNote && String(ch.charNote).trim());
+      var gear = ch.gear || {};
+      var gearKeys = Object.keys(gear);
+      var hasGear = gearKeys.some(function (k) {
+        return !!(gear[k] && String(gear[k]).trim());
+      });
+      var hasPassive = !!ch.passiveSkill;
+      var hasTurns = false;
+      if (ch.turns && typeof ch.turns === "object") {
+        hasTurns = Object.keys(ch.turns).some(function (tk) {
+          return !!ch.turns[tk];
+        });
+      }
+
+      if (!hasName && !hasNote && !hasGear && !hasPassive && !hasTurns) {
+        rosterOut[i] = null;
+        continue;
+      }
+
+      minimal = {};
+      if (hasName) minimal.n = String(ch.charName).trim();
+      if (hasNote) minimal.o = String(ch.charNote).trim();
+
+      if (hasGear) {
+        var g = {};
+        if (gear.weapon && String(gear.weapon).trim()) g.w = String(gear.weapon).trim();
+        if (gear.helmet && String(gear.helmet).trim()) g.h = String(gear.helmet).trim();
+        if (gear.armor && String(gear.armor).trim()) g.a = String(gear.armor).trim();
+        if (gear.acc1 && String(gear.acc1).trim()) g.a1 = String(gear.acc1).trim();
+        if (gear.acc2 && String(gear.acc2).trim()) g.a2 = String(gear.acc2).trim();
+        if (gear.acc3 && String(gear.acc3).trim()) g.a3 = String(gear.acc3).trim();
+        if (gear.skill1 && String(gear.skill1).trim()) g.s1 = String(gear.skill1).trim();
+        if (gear.skill2 && String(gear.skill2).trim()) g.s2 = String(gear.skill2).trim();
+        if (gear.skill3 && String(gear.skill3).trim()) g.s3 = String(gear.skill3).trim();
+        if (gear.skill4 && String(gear.skill4).trim()) g.s4 = String(gear.skill4).trim();
+        if (Object.keys(g).length) minimal.g = g;
+      }
+
+      function packSkill(sk, isPassive) {
+        if (!sk) return null;
+        var out = {};
+        var sn = typeof sk.skillName === "string" ? sk.skillName : "";
+        if (!isPassive && sn) out.sn = sn;
+        if (!isPassive && sk.skillType) out.st = sk.skillType;
+
+        if (!isPassive) {
+          if (sk.bp) out.bp = Number(sk.bp || 0);
+          if (sk.shieldBreak) out.sb = Number(sk.shieldBreak || 0);
+        }
+
+        if (sk.summonName && String(sk.summonName).trim()) out.sum = String(sk.summonName).trim();
+        if (sk.summonEnabled) out.se = true;
+        if (sk.summonBp) out.sbp = Number(sk.summonBp || 0);
+        if (sk.summonBreak) out.sbr = Number(sk.summonBreak || 0);
+
+        if (sk.gutsEnabled) out.ge = true;
+        if (sk.stateSwitchEnabled) out.ss = true;
+        if (sk.chaseEnabled) out.ce = true;
+        if (sk.chaseBreak) out.cbr = Number(sk.chaseBreak || 0);
+
+        if (sk.power) out.p = Number(sk.power || 0);
+        if (sk.upper) out.u = Number(sk.upper || 0);
+        if (sk.bean) out.b = Number(sk.bean || 0);
+        if (sk.ultGauge) out.ug = Number(sk.ultGauge || 0);
+        if (sk.crit) out.c = true;
+
+        var effs = (sk.effects || [])
+          .map(function (e) {
+            if (!e) return null;
+            var v = Number(e.value || 0);
+            if (!(v > 0)) return null;
+            var note = typeof e.note === "string" ? e.note.trim() : "";
+            var eo = { z: e.zone, t: e.type, v: v };
+            if (e.zone === "passive" && note) eo.n = note;
+            return eo;
+          })
+          .filter(Boolean);
+        if (effs.length) out.e = effs;
+
+        // 如果除了被动名以外都空，仍可能被动只有统计字段
+        if (Object.keys(out).length === 0) return null;
+        return out;
+      }
+
+      if (hasPassive) {
+        var pk = packSkill(ch.passiveSkill, true);
+        if (pk) minimal.p = pk;
+      }
+
+      if (hasTurns) {
+        var turnsObj = {};
+        Object.keys(ch.turns || {}).forEach(function (tk) {
+          var tn = Number(tk);
+          if (!Number.isInteger(tn) || tn < 1 || tn > state.turnCount) return;
+          var sk = ch.turns[tn];
+          var packed = packSkill(sk, false);
+          if (packed) turnsObj[String(tn)] = packed;
+        });
+        if (Object.keys(turnsObj).length) minimal.t = turnsObj;
+      }
+
+      rosterOut[i] = minimal;
+    }
+
+    // 去掉末尾的空槽位，避免 JSON 数组过长；但保留中间 null 以维持索引对齐
+    while (rosterOut.length > 0 && rosterOut[rosterOut.length - 1] === null) {
+      rosterOut.pop();
+    }
+
+    return {
+      v: 2,
+      k: "pz1",
+      t: new Date().toISOString(),
+      tn: state.teamName || "",
+      tm: state.teamNote || "",
+      tc: state.turnCount,
+      tv: state.turnFormView === "detailed" ? "detailed" : "simple",
+      r: rosterOut,
+    };
+  }
+
+  function expandSharePayloadV2(payload) {
+    var roster = emptyRoster();
+    var arr = payload && Array.isArray(payload.r) ? payload.r : [];
+    for (var i = 0; i < 8; i += 1) {
+      var m = i < arr.length ? arr[i] : null;
+      if (!m) continue;
+
+      var ch = { charName: "", charNote: "", color: "", avatar: "", gear: {}, turns: {} };
+      ch.charName = typeof m.n === "string" ? m.n : "";
+      ch.charNote = typeof m.o === "string" ? m.o : "";
+      ch.color = hashColor(ch.charName || "未命名");
+
+      if (m.g && typeof m.g === "object") {
+        ch.gear = {
+          weapon: typeof m.g.w === "string" ? m.g.w : "",
+          helmet: typeof m.g.h === "string" ? m.g.h : "",
+          armor: typeof m.g.a === "string" ? m.g.a : "",
+          acc1: typeof m.g.a1 === "string" ? m.g.a1 : "",
+          acc2: typeof m.g.a2 === "string" ? m.g.a2 : "",
+          acc3: typeof m.g.a3 === "string" ? m.g.a3 : "",
+          skill1: typeof m.g.s1 === "string" ? m.g.s1 : "",
+          skill2: typeof m.g.s2 === "string" ? m.g.s2 : "",
+          skill3: typeof m.g.s3 === "string" ? m.g.s3 : "",
+          skill4: typeof m.g.s4 === "string" ? m.g.s4 : "",
+        };
+      }
+
+      function unpackSkill(p, isPassive, turnNum) {
+        if (!p || typeof p !== "object") return null;
+        var sk = normalizeSkill({
+          skillName: isPassive ? "被动" : typeof p.sn === "string" ? p.sn : "",
+          turn: isPassive ? 0 : Number(turnNum || 0),
+          skillType: isPassive ? "" : typeof p.st === "string" ? p.st : "",
+          bp: isPassive ? 0 : Number(p.bp || 0),
+          summonName: typeof p.sum === "string" ? p.sum : "",
+          shieldBreak: isPassive ? 0 : Number(p.sb || 0),
+          summonEnabled: !!p.se,
+          summonBp: Number(p.sbp || 0),
+          summonBreak: Number(p.sbr || 0),
+          gutsEnabled: !!p.ge,
+          stateSwitchEnabled: !!p.ss,
+          chaseEnabled: !!p.ce,
+          chaseCount: 0,
+          chaseBreak: Number(p.cbr || 0),
+          effects: Array.isArray(p.e)
+            ? p.e.map(function (e) {
+                if (!e) return null;
+                return {
+                  zone: String(e.z || ""),
+                  type: String(e.t || ""),
+                  value: Number(e.v || 0),
+                  note: typeof e.n === "string" ? e.n : "",
+                };
+              }).filter(Boolean)
+            : [],
+          power: Number(p.p || 0),
+          upper: Number(p.u || 0),
+          bean: Number(p.b || 0),
+          ultGauge: Number(p.ug || 0),
+          crit: !!p.c,
+        });
+        return sk;
+      }
+
+      if (m.p) {
+        var ps = unpackSkill(m.p, true, 0);
+        if (ps) ch.passiveSkill = ps;
+      }
+
+      if (m.t && typeof m.t === "object") {
+        Object.keys(m.t).forEach(function (tk) {
+          var tn = Number(tk);
+          if (!Number.isInteger(tn) || tn < 1) return;
+          var ts = unpackSkill(m.t[tk], false, tn);
+          if (ts) ch.turns[tn] = ts;
+        });
+      }
+
+      roster[i] = ch;
+    }
+
+    return {
+      roster: roster,
+      teamName: typeof payload.tn === "string" ? payload.tn : "",
+      teamNote: typeof payload.tm === "string" ? payload.tm : "",
+      turnCount: clampTurnCount(payload.tc || 5),
+      turnFormView: payload.tv === "detailed" ? "detailed" : "simple",
+    };
+  }
+
+  var SHARE_ZONES = ["passive", "active", "ult", "summon"];
+  var SHARE_TYPES = ["atk", "def", "dmg", "res", "atkCap", "defCap", "dmgCap", "resCap"];
+
+  function shareZoneIndex(zone) {
+    var i = SHARE_ZONES.indexOf(String(zone || ""));
+    return i >= 0 ? i : 0;
+  }
+
+  function shareTypeIndex(typ) {
+    var i = SHARE_TYPES.indexOf(String(typ || ""));
+    return i >= 0 ? i : 0;
+  }
+
+  function packGearArray(gear) {
+    var order = ["weapon", "helmet", "armor", "acc1", "acc2", "acc3", "skill1", "skill2", "skill3", "skill4"];
+    var arr = order.map(function (key) {
+      var v = gear[key] && String(gear[key]).trim();
+      return v ? String(v).trim() : "";
+    });
+    while (arr.length > 0 && arr[arr.length - 1] === "") arr.pop();
+    return arr.length ? arr : null;
+  }
+
+  function unpackGearArray(arr) {
+    var order = ["weapon", "helmet", "armor", "acc1", "acc2", "acc3", "skill1", "skill2", "skill3", "skill4"];
+    var g = {};
+    if (!Array.isArray(arr)) return g;
+    for (var i = 0; i < order.length; i += 1) {
+      g[order[i]] = typeof arr[i] === "string" ? arr[i] : "";
+    }
+    return g;
+  }
+
+  function packSkillV3(sk, isPassive) {
+    if (!sk) return null;
+    var out = {};
+    if (!isPassive) {
+      var sn = typeof sk.skillName === "string" ? sk.skillName : "";
+      if (sn) out.m = sn;
+      var st = sk.skillType === "battle" || sk.skillType === "guts" ? "active" : sk.skillType;
+      if (st === "ex") out.y = 2;
+      else if (st === "ult") out.y = 3;
+      else if (st === "active") out.y = 1;
+      if (sk.bp) out.b = Number(sk.bp || 0);
+      if (sk.shieldBreak) out.d = Number(sk.shieldBreak || 0);
+    }
+    if (sk.summonName && String(sk.summonName).trim()) out.u = String(sk.summonName).trim();
+    if (sk.summonBp) out.j = Number(sk.summonBp || 0);
+    if (sk.summonBreak) out.r = Number(sk.summonBreak || 0);
+    if (sk.power) out.p = Number(sk.power || 0);
+    if (sk.upper) out.q = Number(sk.upper || 0);
+    if (sk.bean) out.w = Number(sk.bean || 0);
+    if (sk.ultGauge) out.g = Number(sk.ultGauge || 0);
+    var f = 0;
+    if (sk.crit) f |= 1;
+    if (sk.summonEnabled) f |= 2;
+    if (sk.gutsEnabled) f |= 4;
+    if (sk.stateSwitchEnabled) f |= 8;
+    if (sk.chaseEnabled) f |= 16;
+    if (sk.chaseBreak) out.x = Number(sk.chaseBreak || 0);
+    if (f) out.f = f;
+
+    var effRows = (sk.effects || [])
+      .map(function (e) {
+        if (!e) return null;
+        var v = Number(e.value || 0);
+        if (!(v > 0)) return null;
+        var note = typeof e.note === "string" ? e.note.trim() : "";
+        var row = [shareZoneIndex(e.zone), shareTypeIndex(e.type), v];
+        if (e.zone === "passive" && note) row.push(note);
+        return row;
+      })
+      .filter(Boolean);
+    if (effRows.length) out.e = effRows;
+
+    if (Object.keys(out).length === 0) return null;
+    return out;
+  }
+
+  function unpackSkillV3(p, isPassive, turnNum) {
+    if (!p || typeof p !== "object") return null;
+    var f = Number(p.f || 0);
+    var skillName = isPassive ? "被动" : typeof p.m === "string" ? p.m : "";
+    var y = Number(p.y || 0);
+    var stMap = { 1: "active", 2: "ex", 3: "ult" };
+    var skillType = isPassive ? "" : stMap[y] || "active";
+    var effects = [];
+    if (Array.isArray(p.e)) {
+      p.e.forEach(function (row) {
+        if (!Array.isArray(row) || row.length < 3) return;
+        var zi = Number(row[0]);
+        var ti = Number(row[1]);
+        if (!Number.isFinite(zi) || !Number.isFinite(ti)) return;
+        var zone = SHARE_ZONES[zi] || "";
+        var type = SHARE_TYPES[ti] || "";
+        var value = Number(row[2] || 0);
+        var note = row.length > 3 && typeof row[3] === "string" ? row[3] : "";
+        if (value > 0) effects.push({ zone: zone, type: type, value: value, note: note });
+      });
+    }
+    return normalizeSkill({
+      skillName: skillName,
+      turn: isPassive ? 0 : Number(turnNum || 0),
+      skillType: skillType,
+      bp: isPassive ? 0 : Number(p.b || 0),
+      summonName: typeof p.u === "string" ? p.u : "",
+      shieldBreak: isPassive ? 0 : Number(p.d || 0),
+      summonEnabled: !!(f & 2),
+      summonBp: Number(p.j || 0),
+      summonBreak: Number(p.r || 0),
+      gutsEnabled: !!(f & 4),
+      stateSwitchEnabled: !!(f & 8),
+      chaseEnabled: !!(f & 16),
+      chaseCount: 0,
+      chaseBreak: Number(p.x || 0),
+      effects: effects,
+      power: Number(p.p || 0),
+      upper: Number(p.q || 0),
+      bean: Number(p.w || 0),
+      ultGauge: Number(p.g || 0),
+      crit: !!(f & 1),
+    });
+  }
+
+  function buildSharePayloadV3() {
+    var rosterOut = new Array(8).fill(null);
+    for (var i = 0; i < 8; i += 1) {
+      var ch = state.roster[i] || {};
+      var hasName = !!(ch.charName && String(ch.charName).trim());
+      var hasNote = !!(ch.charNote && String(ch.charNote).trim());
+      var gear = ch.gear || {};
+      var gearArr = packGearArray(gear);
+      var hasGear = !!gearArr;
+      var hasPassive = !!ch.passiveSkill;
+      var hasTurns = false;
+      if (ch.turns && typeof ch.turns === "object") {
+        hasTurns = Object.keys(ch.turns).some(function (tk) {
+          return !!ch.turns[tk];
+        });
+      }
+      if (!hasName && !hasNote && !hasGear && !hasPassive && !hasTurns) {
+        rosterOut[i] = null;
+        continue;
+      }
+      var minimal = {};
+      if (hasName) minimal.n = String(ch.charName).trim();
+      if (hasNote) minimal.o = String(ch.charNote).trim();
+      if (hasGear) minimal.g = gearArr;
+      if (hasPassive) {
+        var pk = packSkillV3(ch.passiveSkill, true);
+        if (pk) minimal.p = pk;
+      }
+      if (hasTurns) {
+        var turnsObj = {};
+        Object.keys(ch.turns || {}).forEach(function (tk) {
+          var tn = Number(tk);
+          if (!Number.isInteger(tn) || tn < 1 || tn > state.turnCount) return;
+          var sk = ch.turns[tn];
+          var packed = packSkillV3(sk, false);
+          if (packed) turnsObj[String(tn)] = packed;
+        });
+        if (Object.keys(turnsObj).length) minimal.t = turnsObj;
+      }
+      rosterOut[i] = minimal;
+    }
+    while (rosterOut.length > 0 && rosterOut[rosterOut.length - 1] === null) {
+      rosterOut.pop();
+    }
+    var payload = { v: 3, k: "pz1", r: rosterOut };
+    if (state.teamName && String(state.teamName).trim()) payload.tn = String(state.teamName).trim();
+    if (state.teamNote && String(state.teamNote).trim()) payload.tm = String(state.teamNote).trim();
+    if (state.turnCount !== 5) payload.tc = state.turnCount;
+    if (state.turnFormView === "detailed") payload.tv = 1;
+    return payload;
+  }
+
+  function expandSharePayloadV3(payload) {
+    var roster = emptyRoster();
+    var arr = payload && Array.isArray(payload.r) ? payload.r : [];
+    for (var i = 0; i < 8; i += 1) {
+      var m = i < arr.length ? arr[i] : null;
+      if (!m) continue;
+      var ch = { charName: "", charNote: "", color: "", avatar: "", gear: {}, turns: {} };
+      ch.charName = typeof m.n === "string" ? m.n : "";
+      ch.charNote = typeof m.o === "string" ? m.o : "";
+      ch.color = hashColor(ch.charName || "未命名");
+      if (Array.isArray(m.g)) ch.gear = unpackGearArray(m.g);
+      else if (m.g && typeof m.g === "object") {
+        ch.gear = {
+          weapon: typeof m.g.w === "string" ? m.g.w : "",
+          helmet: typeof m.g.h === "string" ? m.g.h : "",
+          armor: typeof m.g.a === "string" ? m.g.a : "",
+          acc1: typeof m.g.a1 === "string" ? m.g.a1 : "",
+          acc2: typeof m.g.a2 === "string" ? m.g.a2 : "",
+          acc3: typeof m.g.a3 === "string" ? m.g.a3 : "",
+          skill1: typeof m.g.s1 === "string" ? m.g.s1 : "",
+          skill2: typeof m.g.s2 === "string" ? m.g.s2 : "",
+          skill3: typeof m.g.s3 === "string" ? m.g.s3 : "",
+          skill4: typeof m.g.s4 === "string" ? m.g.s4 : "",
+        };
+      }
+      if (m.p) {
+        var ps = unpackSkillV3(m.p, true, 0);
+        if (ps) ch.passiveSkill = ps;
+      }
+      if (m.t && typeof m.t === "object") {
+        Object.keys(m.t).forEach(function (tk) {
+          var tn = Number(tk);
+          if (!Number.isInteger(tn) || tn < 1) return;
+          var ts = unpackSkillV3(m.t[tk], false, tn);
+          if (ts) ch.turns[tn] = ts;
+        });
+      }
+      roster[i] = ch;
+    }
+    var tv = payload.tv;
+    return {
+      roster: roster,
+      teamName: typeof payload.tn === "string" ? payload.tn : "",
+      teamNote: typeof payload.tm === "string" ? payload.tm : "",
+      turnCount: clampTurnCount(payload.tc != null ? payload.tc : 5),
+      turnFormView: tv === 1 || tv === "detailed" ? "detailed" : "simple",
+    };
+  }
+
+  async function encodeShareToken(payloadObj) {
+    var json = JSON.stringify(payloadObj);
+    var bytes = utf8ToBytes(json);
+    var gz = await gzipBytes(bytes);
+    if (gz && gz.length + 8 < bytes.length) {
+      var out = new Uint8Array(1 + gz.length);
+      out[0] = 1;
+      out.set(gz, 1);
+      return "z1" + bytesToBase64Url(out);
+    }
+    var out2 = new Uint8Array(1 + bytes.length);
+    out2[0] = 0;
+    out2.set(bytes, 1);
+    return "z0" + bytesToBase64Url(out2);
+  }
+
+  async function decodeShareToken(token) {
+    var s = String(token || "");
+    if (!s.startsWith("z0") && !s.startsWith("z1")) {
+      throw new Error("bad token prefix");
+    }
+    var kind = s.slice(0, 2);
+    var b64 = s.slice(2);
+    var packed = base64UrlToBytes(b64);
+    if (!packed.length) throw new Error("empty token");
+    var flag = packed[0];
+    var body = packed.subarray(1);
+    var jsonBytes = body;
+    if (flag === 1) {
+      var ug = await gunzipBytes(body);
+      if (!ug) throw new Error("gzip not supported");
+      jsonBytes = ug;
+    } else if (flag !== 0) {
+      throw new Error("bad token flag");
+    }
+    var text = new TextDecoder().decode(jsonBytes);
+    return JSON.parse(text);
+  }
+
+  // 分享链接与二维码内容始终用线上页，避免 file:// 或本地路径把码撑得极密、也无法发给别人
+  var SHARE_PAGE_BASE =
+    "https://w1334113230.github.io/qllr_dldbz_paiZhouUtil/paiZhouUtil/index.html?d=";
+
+  async function openQrExportModal() {
+    var backdrop = document.getElementById("qrModalBackdrop");
+    var img = document.getElementById("qrModalImg");
+    var ta = document.getElementById("qrModalUrl");
+    var tip = document.getElementById("qrModalTip");
+    if (!backdrop || !img || !ta || !tip) return;
+
+    var payload = buildSharePayloadV3();
+    var token = await encodeShareToken(payload);
+    var shareUrl = SHARE_PAGE_BASE + encodeURIComponent(token);
+
+    ta.value = shareUrl;
+
+    var approxBytes = utf8ToBytes(shareUrl).length;
+    tip.textContent =
+      "链接固定为 GitHub Pages（v3 gzip，无头像/cellCaps）。UTF-8 约 " +
+      approxBytes +
+      " bytes。纠错 L、画布 300px；若仍难扫可缩短装备/备注文字。";
+
+    var toDataURL = await loadQrCodeToDataURL();
+    if (typeof toDataURL !== "function") {
+      alert("二维码模块加载失败：请确认 paiZhouUtil/vendor/qrcode.bundle.js 存在（仓库根目录执行 npm install && npm run vendor 可生成）。");
+      return;
+    }
+
+    var dataUrl = await toDataURL(shareUrl, {
+      errorCorrectionLevel: "L",
+      margin: 4,
+      width: 300,
+    });
+    img.src = dataUrl;
+
+    backdrop.classList.remove("is-hidden");
+  }
+
+  function closeQrExportModal() {
+    var backdrop = document.getElementById("qrModalBackdrop");
+    if (backdrop) backdrop.classList.add("is-hidden");
+  }
+
+  /** 从 d 参数字符串解码并写入 state（不跳转、不改地址栏） */
+  async function applyShareTokenToState(dParam) {
+    var d = String(dParam || "").trim();
+    if (!d) throw new Error("empty");
+    var decoded = await decodeShareToken(decodeURIComponent(d));
+    if (!decoded || decoded.k !== "pz1") {
+      throw new Error("bad payload");
+    }
+    var expanded;
+    if (decoded.v === 3) expanded = expandSharePayloadV3(decoded);
+    else if (decoded.v === 2) expanded = expandSharePayloadV2(decoded);
+    else throw new Error("bad payload");
+    state.turnCount = expanded.turnCount;
+    state.teamName = expanded.teamName;
+    state.teamNote = expanded.teamNote;
+    state.turnFormView = expanded.turnFormView;
+    state.roster = normalizeRoster(expanded.roster);
+    state.cellCaps = collectCellCapsFromDom();
+    saveToStorage();
+  }
+
+  /** 从粘贴的整段文字里取出 token（完整 http(s) 链接、?d=…、或裸 z0/z1 串） */
+  function extractShareTokenFromPaste(text) {
+    var s = String(text || "")
+      .trim()
+      .replace(/[\r\n]+/g, "");
+    if (!s) return "";
+    if (/^z[01][A-Za-z0-9_-]+$/i.test(s)) return s;
+    try {
+      var u = new URL(s);
+      var q = u.searchParams.get("d");
+      if (q) return q;
+    } catch (e1) {}
+    try {
+      var u2 = new URL(s, "https://example.invalid/share");
+      var q2 = u2.searchParams.get("d");
+      if (q2) return q2;
+    } catch (e2) {}
+    var m = s.match(/[?&]d=([^&\s#]+)/);
+    if (m && m[1]) {
+      try {
+        return decodeURIComponent(m[1]);
+      } catch (e3) {
+        return m[1];
+      }
+    }
+    return "";
+  }
+
+  function openShareImportModal() {
+    var backdrop = document.getElementById("shareImportModalBackdrop");
+    var ta = document.getElementById("shareImportTextarea");
+    var fi = document.getElementById("shareImportQrFile");
+    var fn = document.getElementById("shareImportFileName");
+    if (ta) ta.value = "";
+    if (fi) fi.value = "";
+    if (fn) fn.textContent = "";
+    if (backdrop) backdrop.classList.remove("is-hidden");
+  }
+
+  function closeShareImportModal() {
+    var backdrop = document.getElementById("shareImportModalBackdrop");
+    if (backdrop) backdrop.classList.add("is-hidden");
+  }
+
+  async function tryImportFromShareUrl() {
+    var u = new URL(window.location.href);
+    var d = u.searchParams.get("d");
+    if (!d) return false;
+    try {
+      await applyShareTokenToState(d);
+      u.searchParams.delete("d");
+      history.replaceState({}, "", u.toString());
+      return true;
+    } catch (e) {
+      console.error(e);
+      alert("从链接参数导入失败：数据损坏或不兼容。");
+      return false;
+    }
+  }
+
   function emptyRoster() {
     return [{}, {}, {}, {}, {}, {}, {}, {}];
   }
@@ -313,7 +1083,11 @@
   function applyImportedData(parsed) {
     state.turnCount = clampTurnCount((parsed && parsed.turnCount) || detectTurnCountFromRawRoster(parsed && parsed.roster));
     state.roster = normalizeRoster(parsed && parsed.roster);
-    state.cellCaps = parsed && parsed.cellCaps && typeof parsed.cellCaps === "object" ? parsed.cellCaps : {};
+    if (parsed && parsed.cellCaps && typeof parsed.cellCaps === "object" && Object.keys(parsed.cellCaps).length) {
+      state.cellCaps = parsed.cellCaps;
+    } else {
+      state.cellCaps = collectCellCapsFromDom();
+    }
     state.teamName = parsed && typeof parsed.teamName === "string" ? parsed.teamName : "";
     state.teamNote = parsed && typeof parsed.teamNote === "string" ? parsed.teamNote : "";
     state.turnFormView = parsed && parsed.turnFormView === "detailed" ? "detailed" : "simple";
@@ -1615,6 +2389,87 @@
     });
 
     document.getElementById("exportBtn").addEventListener("click", exportData);
+    document.getElementById("exportQrBtn").addEventListener("click", function () {
+      openQrExportModal().catch(function (err) {
+        console.error(err);
+        alert("导出二维码失败：" + (err && err.message ? err.message : String(err)));
+      });
+    });
+    document.getElementById("qrModalClose").addEventListener("click", closeQrExportModal);
+    document.getElementById("qrModalBackdrop").addEventListener("click", function (e) {
+      if (e.target.id === "qrModalBackdrop") closeQrExportModal();
+    });
+    document.getElementById("qrModalCopy").addEventListener("click", async function () {
+      var ta = document.getElementById("qrModalUrl");
+      if (!ta) return;
+      try {
+        await navigator.clipboard.writeText(ta.value || "");
+      } catch (e) {
+        ta.focus();
+        ta.select();
+        alert("复制失败：请手动复制文本框内容。");
+      }
+    });
+    document.getElementById("importShareBtn").addEventListener("click", function () {
+      openShareImportModal();
+    });
+    document.getElementById("shareImportQrFile").addEventListener("change", function (e) {
+      var fn = document.getElementById("shareImportFileName");
+      var f = e.target.files && e.target.files[0];
+      if (fn) fn.textContent = f ? f.name : "";
+    });
+    document.getElementById("shareImportCancel").addEventListener("click", closeShareImportModal);
+    document.getElementById("shareImportModalBackdrop").addEventListener("click", function (e) {
+      if (e.target.id === "shareImportModalBackdrop") closeShareImportModal();
+    });
+    document.getElementById("shareImportConfirm").addEventListener("click", function () {
+      var ta = document.getElementById("shareImportTextarea");
+      var raw = ta ? ta.value : "";
+      var tokenFromLink = extractShareTokenFromPaste(raw);
+      var fileInput = document.getElementById("shareImportQrFile");
+      var file = fileInput && fileInput.files && fileInput.files[0];
+
+      function finishImport(token) {
+        return applyShareTokenToState(token).then(function () {
+          applyCellCapsToDom();
+          renderParty();
+          rebuildBuffGrid();
+          updateStatsPanel(calcSummary());
+          renderTeamMetaUI();
+          closeShareImportModal();
+        });
+      }
+
+      if (tokenFromLink) {
+        finishImport(tokenFromLink).catch(function (err) {
+          console.error(err);
+          alert("导入失败：数据损坏、格式不对或不兼容。");
+        });
+        return;
+      }
+
+      if (!file) {
+        alert("请粘贴含 ?d= 的链接或分享码，或选择一张二维码截图。");
+        return;
+      }
+
+      decodeQrFromImageFile(file)
+        .then(function (decodedText) {
+          var tokenFromImg = extractShareTokenFromPaste(decodedText);
+          if (!tokenFromImg) {
+            throw new Error("图中识别出的内容不是有效分享链接或分享码");
+          }
+          return finishImport(tokenFromImg);
+        })
+        .catch(function (err) {
+          console.error(err);
+          alert(
+            "从图片导入失败：" +
+              (err && err.message ? err.message : String(err)) +
+              "（可改用粘贴链接；若缺少识别库请确认 paiZhouUtil/vendor/jsqr.bundle.js 存在并执行 npm run vendor 重新打包）"
+          );
+        });
+    });
     document.getElementById("resetBtn").addEventListener("click", function () {
       var ok = confirm("确认重置全部数据吗？此操作不可撤销。");
       if (!ok) return;
@@ -1701,18 +2556,36 @@
   }
 
   document.addEventListener("DOMContentLoaded", function () {
-    loadFromStorage();
-    initTooltipSystem();
-    initCapEditors();
-    if (!state.cellCaps || !Object.keys(state.cellCaps).length) {
-      state.cellCaps = collectCellCapsFromDom();
-    } else {
-      applyCellCapsToDom();
-    }
-    syncBuffLayout(document);
-    initHandlers();
-    renderParty();
-    rebuildBuffGrid();
-    updateStatsPanel(calcSummary());
+    tryImportFromShareUrl()
+      .then(function (imported) {
+        if (!imported) loadFromStorage();
+        initTooltipSystem();
+        initCapEditors();
+        if (!state.cellCaps || !Object.keys(state.cellCaps).length) {
+          state.cellCaps = collectCellCapsFromDom();
+        } else {
+          applyCellCapsToDom();
+        }
+        syncBuffLayout(document);
+        initHandlers();
+        renderParty();
+        rebuildBuffGrid();
+        updateStatsPanel(calcSummary());
+      })
+      .catch(function () {
+        loadFromStorage();
+        initTooltipSystem();
+        initCapEditors();
+        if (!state.cellCaps || !Object.keys(state.cellCaps).length) {
+          state.cellCaps = collectCellCapsFromDom();
+        } else {
+          applyCellCapsToDom();
+        }
+        syncBuffLayout(document);
+        initHandlers();
+        renderParty();
+        rebuildBuffGrid();
+        updateStatsPanel(calcSummary());
+      });
   });
 })();

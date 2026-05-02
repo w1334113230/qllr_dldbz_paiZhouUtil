@@ -1,0 +1,12 @@
+{
+  "private": true,
+  "description": "仅用于把 qrcode / jsQR 打成离线 vendor，页面不依赖 Node 运行",
+  "scripts": {
+    "vendor": "node scripts/build-vendor.cjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.21.5",
+    "jsqr": "1.4.0",
+    "qrcode": "1.5.3"
+  }
+}

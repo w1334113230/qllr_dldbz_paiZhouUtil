@@ -13,6 +13,7 @@ https://w1334113230.github.io/qllr_dldbz_paiZhouUtil/paiZhouUtil/index.html
 - `paiZhouUtil/index.html`：页面结构
 - `paiZhouUtil/styles.css`：样式
 - `paiZhouUtil/app.js`：交互逻辑、状态管理、持久化
+- `paiZhouUtil/vendor/`：离线打包的二维码生成（`qrcode`）与识别（`jsQR`），不依赖外网 CDN
 - `data/`：可选数据目录（我放了示例队伍）
 - `docs/screenshots/`：README 截图目录
 
@@ -29,9 +30,11 @@ https://w1334113230.github.io/qllr_dldbz_paiZhouUtil/paiZhouUtil/index.html
 
 ## 运行方式
 
-### 方式一：直接打开
+### 方式一：直接打开（可完全离线）
 
-直接双击 `paiZhouUtil/index.html` 即可使用。
+将 **`paiZhouUtil/` 整个文件夹** 放到本机任意位置（需包含与 `index.html` 同级的 `styles.css`、`app.js` 以及 **`vendor/`** 子目录），双击 **`index.html`** 即可使用：不依赖外网 CDN，导出二维码、从图片识别导入分享均在本地完成。
+
+若分发压缩包，请勿只打包单个 HTML 文件，否则会丢失样式、脚本与二维码库。
 
 ### 方式二：本地静态服务
 
@@ -42,6 +45,15 @@ python3 -m http.server 8080
 ```
 
 然后访问：`http://localhost:8080/paiZhouUtil/index.html`
+
+### 重新打包 vendor（可选）
+
+若缺少 `paiZhouUtil/vendor/*.bundle.js` 或需升级版本，在**仓库根目录**执行：
+
+```bash
+npm install
+npm run vendor
+```
 
 ## 操作步骤（建议流程）
 
