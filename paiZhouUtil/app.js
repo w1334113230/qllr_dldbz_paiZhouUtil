@@ -744,6 +744,8 @@
     state.turnFormView = expanded.turnFormView;
     state.roster = normalizeRoster(expanded.roster);
     state.cellCaps = collectCellCapsFromDom();
+    await loadWikiAvatarsOnce();
+    syncWikiAvatarsIntoRosterChars();
     saveToStorage();
   }
 
@@ -1104,6 +1106,7 @@
     rebuildBuffGrid();
     updateStatsPanel(calcSummary());
     saveToStorage();
+    refreshWikiAvatarsOnRosterThenRerender();
   }
 
   function resetAllData() {
@@ -1996,6 +1999,31 @@
     if (row && row.avatar) char.avatar = row.avatar;
   }
 
+  /** 对全队无头像且 Wiki 可匹配的角色补头像；有任意变更返回 true */
+  function syncWikiAvatarsIntoRosterChars() {
+    if (!wikiAvatarByName) return false;
+    var changed = false;
+    for (var i = 0; i < state.roster.length; i += 1) {
+      var ch = state.roster[i];
+      if (!ch || typeof ch !== "object") continue;
+      var before = String(ch.avatar || "").trim();
+      applyWikiAvatarIfCharHasNoAvatar(ch);
+      if (String(ch.avatar || "").trim() !== before) changed = true;
+    }
+    return changed;
+  }
+
+  /** 分享/JSON 导入或本地读档后：加载 Wiki 库并为缺头像角色补图 */
+  function refreshWikiAvatarsOnRosterThenRerender() {
+    return loadWikiAvatarsOnce().then(function () {
+      if (!syncWikiAvatarsIntoRosterChars()) return;
+      renderParty();
+      rebuildBuffGrid();
+      updateStatsPanel(calcSummary());
+      saveToStorage();
+    });
+  }
+
   function parseNumber(input, fallback) {
     var val = Number(input);
     return Number.isFinite(val) ? val : fallback;
@@ -2795,6 +2823,7 @@
         renderParty();
         rebuildBuffGrid();
         updateStatsPanel(calcSummary());
+        refreshWikiAvatarsOnRosterThenRerender();
       })
       .catch(function () {
         loadFromStorage();
@@ -2810,6 +2839,7 @@
         renderParty();
         rebuildBuffGrid();
         updateStatsPanel(calcSummary());
+        refreshWikiAvatarsOnRosterThenRerender();
       });
   });
 })();

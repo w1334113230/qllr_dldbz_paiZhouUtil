@@ -1,6 +1,11 @@
 # Wiki 头像数据
 
-由仓库根目录脚本 `scrape_wiki_avatars.py`（已 `.gitignore`，不随仓库分发）从 [旅人图鉴2](https://wiki.biligame.com/octopathsp/%E6%97%85%E4%BA%BA%E5%9B%BE%E9%89%B42) 抓取。
+由仓库根目录脚本 `scrape_wiki_avatars.py`（已 `.gitignore`，不随仓库分发）从以下页面抓取并**合并**：
+
+- [旅人图鉴2](https://wiki.biligame.com/octopathsp/%E6%97%85%E4%BA%BA%E5%9B%BE%E9%89%B42)（打底）
+- [旅人图鉴](https://wiki.biligame.com/octopathsp/%E6%97%85%E4%BA%BA%E5%9B%BE%E9%89%B4)（**同名时以此页为准**）
+
+合并后 JSON 中含 `sourcePages`、`sources`、`mergePolicy` 字段说明来源。
 
 ## 文件
 

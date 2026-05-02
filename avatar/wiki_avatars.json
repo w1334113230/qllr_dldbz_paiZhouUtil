@@ -1,8 +1,23 @@
 {
   "schema": "octopathsp-wiki-avatars-1",
-  "sourcePage": "https://wiki.biligame.com/octopathsp/%E6%97%85%E4%BA%BA%E5%9B%BE%E9%89%B42",
-  "fetchedAt": "2026-05-02T04:39:00.932185+00:00",
-  "count": 260,
+  "sourcePage": "https://wiki.biligame.com/octopathsp/%E6%97%85%E4%BA%BA%E5%9B%BE%E9%89%B4",
+  "sourcePages": [
+    "https://wiki.biligame.com/octopathsp/%E6%97%85%E4%BA%BA%E5%9B%BE%E9%89%B42",
+    "https://wiki.biligame.com/octopathsp/%E6%97%85%E4%BA%BA%E5%9B%BE%E9%89%B4"
+  ],
+  "sources": [
+    {
+      "label": "旅人图鉴2",
+      "url": "https://wiki.biligame.com/octopathsp/%E6%97%85%E4%BA%BA%E5%9B%BE%E9%89%B42"
+    },
+    {
+      "label": "旅人图鉴",
+      "url": "https://wiki.biligame.com/octopathsp/%E6%97%85%E4%BA%BA%E5%9B%BE%E9%89%B4"
+    }
+  ],
+  "mergePolicy": "同名时以后序来源为准（旅人图鉴 覆盖 旅人图鉴2）",
+  "fetchedAt": "2026-05-02T05:04:24.762264+00:00",
+  "count": 274,
   "byName": {
     "提米诺斯Ex": {
       "avatar": "https://patchwiki.biligame.com/images/octopathsp/thumb/4/42/c56qjegvv7flfgspmi1ddv3bqqkn4xd.png/100px-%E3%83%86%E3%83%A1%E3%83%8E%E3%82%B9Ex.png",
@@ -1303,6 +1318,76 @@
       "avatar": "https://patchwiki.biligame.com/images/octopathsp/thumb/e/e4/rbaaf4c6erw7yuxv826fsvlt004jwpj.png/100px-%E3%83%89%E3%83%AA%E3%83%BC.png",
       "wikiPath": "/octopathsp/%E5%A4%9A%E5%88%A9",
       "wikiTitle": "多利"
+    },
+    "赛卢克": {
+      "avatar": "https://patchwiki.biligame.com/images/octopathsp/thumb/0/02/nlda7st040gnq0rvnwsr1vj257qs906.png/100px-%E3%82%BB%E3%83%AB%E3%82%AF.png",
+      "wikiPath": "/octopathsp/%E8%B5%9B%E5%8D%A2%E5%85%8B",
+      "wikiTitle": "赛卢克"
+    },
+    "莉妮特Ex": {
+      "avatar": "https://patchwiki.biligame.com/images/octopathsp/thumb/7/78/0l7zucniaetz89b4oloamg4uohw7vwa.png/100px-%E3%83%AA%E3%83%8D%E3%83%83%E3%83%88Ex.png",
+      "wikiPath": "/octopathsp/%E8%8E%89%E5%A6%AE%E7%89%B9Ex",
+      "wikiTitle": "莉妮特Ex"
+    },
+    "雷比娜Ex": {
+      "avatar": "https://patchwiki.biligame.com/images/octopathsp/thumb/e/ed/hu0v7qir10vyvekpy5zk7joqn0d9ncl.png/100px-%E3%83%AC%E3%83%B4%E3%82%A3%E3%83%BC%E3%83%8AEx.png",
+      "wikiPath": "/octopathsp/%E9%9B%B7%E6%AF%94%E5%A8%9CEx",
+      "wikiTitle": "雷比娜Ex"
+    },
+    "洛洛": {
+      "avatar": "https://patchwiki.biligame.com/images/octopathsp/thumb/d/da/d2slzgfd18qgrtnfe4t7vswiw9xxnd0.png/100px-%E3%83%AD%E3%83%AD.png",
+      "wikiPath": "/octopathsp/%E6%B4%9B%E6%B4%9B",
+      "wikiTitle": "洛洛"
+    },
+    "雪娜": {
+      "avatar": "https://patchwiki.biligame.com/images/octopathsp/thumb/5/52/e5hnneezmapis9fu4bqha6qqmtkhxin.png/100px-%E3%83%81%E3%82%A7%E3%83%AB%E3%83%8A.png",
+      "wikiPath": "/octopathsp/%E9%9B%AA%E5%A8%9C",
+      "wikiTitle": "雪娜"
+    },
+    "约伦": {
+      "avatar": "https://patchwiki.biligame.com/images/octopathsp/thumb/9/9b/ifvoex3wdqifdoagigpn151jei8hiub.png/100px-%E3%83%A8%E3%83%AB%E3%83%B3.png",
+      "wikiPath": "/octopathsp/%E7%BA%A6%E4%BC%A6",
+      "wikiTitle": "约伦"
+    },
+    "勒凡": {
+      "avatar": "https://patchwiki.biligame.com/images/octopathsp/thumb/b/ba/fvr7xnvp8obn4y4kb7nddjhkt64fx13.png/100px-%E3%83%AC%E3%83%B4%E3%82%A1%E3%83%B3.png",
+      "wikiPath": "/octopathsp/%E5%8B%92%E5%87%A1",
+      "wikiTitle": "勒凡"
+    },
+    "波拉": {
+      "avatar": "https://patchwiki.biligame.com/images/octopathsp/thumb/8/85/mkrn7tqhkrdtdmq9hn31ekar3wp9pbb.png/100px-%E3%83%9D%E3%83%BC%E3%83%A9.png",
+      "wikiPath": "/octopathsp/%E6%B3%A2%E6%8B%89",
+      "wikiTitle": "波拉"
+    },
+    "艾弗伦": {
+      "avatar": "https://patchwiki.biligame.com/images/octopathsp/thumb/7/7c/mq857wejvnlq3ldb0jjbuth61hlwm7x.png/100px-%E3%82%A8%E3%83%95%E3%83%AC%E3%83%B3.png",
+      "wikiPath": "/octopathsp/%E8%89%BE%E5%BC%97%E4%BC%A6",
+      "wikiTitle": "艾弗伦"
+    },
+    "肯尼斯": {
+      "avatar": "https://patchwiki.biligame.com/images/octopathsp/thumb/8/8c/j173kluj2v2uu4zrdfyjv1x1hgl3opl.png/100px-%E3%82%B1%E3%83%8D%E3%82%B9.png",
+      "wikiPath": "/octopathsp/%E8%82%AF%E5%B0%BC%E6%96%AF",
+      "wikiTitle": "肯尼斯"
+    },
+    "科尔尼利亚": {
+      "avatar": "https://patchwiki.biligame.com/images/octopathsp/thumb/8/8b/elgkaw4ma5ul9ncuhrxdmxlvep66jp5.png/100px-%E3%82%B3%E3%83%AB%E3%83%8D%E3%83%AA%E3%82%A2.png",
+      "wikiPath": "/octopathsp/%E7%A7%91%E5%B0%94%E5%B0%BC%E5%88%A9%E4%BA%9A",
+      "wikiTitle": "科尔尼利亚"
+    },
+    "杜兰": {
+      "avatar": "https://patchwiki.biligame.com/images/octopathsp/thumb/1/17/1j78ysf5016yt4jjdh6sm16eiluwzgg.png/100px-%E3%83%87%E3%83%A5%E3%83%A9%E3%83%B3.png",
+      "wikiPath": "/octopathsp/%E6%9D%9C%E5%85%B0",
+      "wikiTitle": "杜兰"
+    },
+    "纳尔": {
+      "avatar": "https://patchwiki.biligame.com/images/octopathsp/thumb/f/f2/h2x46xjhaz0ggldv9l5hnlvsvv8b6ia.png/100px-%E3%83%8A%E3%83%BC%E3%83%AB.png",
+      "wikiPath": "/octopathsp/%E7%BA%B3%E5%B0%94",
+      "wikiTitle": "纳尔"
+    },
+    "普利基特": {
+      "avatar": "https://patchwiki.biligame.com/images/octopathsp/thumb/5/5f/79mg4cr8esy21rp5fniyllyrms8sd9j.png/100px-%E3%83%96%E3%83%AA%E3%82%B8%E3%83%83%E3%83%88.png",
+      "wikiPath": "/octopathsp/%E6%99%AE%E5%88%A9%E5%9F%BA%E7%89%B9",
+      "wikiTitle": "普利基特"
     }
   },
   "list": [
@@ -2865,6 +2950,90 @@
       "avatar": "https://patchwiki.biligame.com/images/octopathsp/thumb/e/e4/rbaaf4c6erw7yuxv826fsvlt004jwpj.png/100px-%E3%83%89%E3%83%AA%E3%83%BC.png",
       "wikiPath": "/octopathsp/%E5%A4%9A%E5%88%A9",
       "wikiTitle": "多利"
+    },
+    {
+      "name": "赛卢克",
+      "avatar": "https://patchwiki.biligame.com/images/octopathsp/thumb/0/02/nlda7st040gnq0rvnwsr1vj257qs906.png/100px-%E3%82%BB%E3%83%AB%E3%82%AF.png",
+      "wikiPath": "/octopathsp/%E8%B5%9B%E5%8D%A2%E5%85%8B",
+      "wikiTitle": "赛卢克"
+    },
+    {
+      "name": "莉妮特Ex",
+      "avatar": "https://patchwiki.biligame.com/images/octopathsp/thumb/7/78/0l7zucniaetz89b4oloamg4uohw7vwa.png/100px-%E3%83%AA%E3%83%8D%E3%83%83%E3%83%88Ex.png",
+      "wikiPath": "/octopathsp/%E8%8E%89%E5%A6%AE%E7%89%B9Ex",
+      "wikiTitle": "莉妮特Ex"
+    },
+    {
+      "name": "雷比娜Ex",
+      "avatar": "https://patchwiki.biligame.com/images/octopathsp/thumb/e/ed/hu0v7qir10vyvekpy5zk7joqn0d9ncl.png/100px-%E3%83%AC%E3%83%B4%E3%82%A3%E3%83%BC%E3%83%8AEx.png",
+      "wikiPath": "/octopathsp/%E9%9B%B7%E6%AF%94%E5%A8%9CEx",
+      "wikiTitle": "雷比娜Ex"
+    },
+    {
+      "name": "洛洛",
+      "avatar": "https://patchwiki.biligame.com/images/octopathsp/thumb/d/da/d2slzgfd18qgrtnfe4t7vswiw9xxnd0.png/100px-%E3%83%AD%E3%83%AD.png",
+      "wikiPath": "/octopathsp/%E6%B4%9B%E6%B4%9B",
+      "wikiTitle": "洛洛"
+    },
+    {
+      "name": "雪娜",
+      "avatar": "https://patchwiki.biligame.com/images/octopathsp/thumb/5/52/e5hnneezmapis9fu4bqha6qqmtkhxin.png/100px-%E3%83%81%E3%82%A7%E3%83%AB%E3%83%8A.png",
+      "wikiPath": "/octopathsp/%E9%9B%AA%E5%A8%9C",
+      "wikiTitle": "雪娜"
+    },
+    {
+      "name": "约伦",
+      "avatar": "https://patchwiki.biligame.com/images/octopathsp/thumb/9/9b/ifvoex3wdqifdoagigpn151jei8hiub.png/100px-%E3%83%A8%E3%83%AB%E3%83%B3.png",
+      "wikiPath": "/octopathsp/%E7%BA%A6%E4%BC%A6",
+      "wikiTitle": "约伦"
+    },
+    {
+      "name": "勒凡",
+      "avatar": "https://patchwiki.biligame.com/images/octopathsp/thumb/b/ba/fvr7xnvp8obn4y4kb7nddjhkt64fx13.png/100px-%E3%83%AC%E3%83%B4%E3%82%A1%E3%83%B3.png",
+      "wikiPath": "/octopathsp/%E5%8B%92%E5%87%A1",
+      "wikiTitle": "勒凡"
+    },
+    {
+      "name": "波拉",
+      "avatar": "https://patchwiki.biligame.com/images/octopathsp/thumb/8/85/mkrn7tqhkrdtdmq9hn31ekar3wp9pbb.png/100px-%E3%83%9D%E3%83%BC%E3%83%A9.png",
+      "wikiPath": "/octopathsp/%E6%B3%A2%E6%8B%89",
+      "wikiTitle": "波拉"
+    },
+    {
+      "name": "艾弗伦",
+      "avatar": "https://patchwiki.biligame.com/images/octopathsp/thumb/7/7c/mq857wejvnlq3ldb0jjbuth61hlwm7x.png/100px-%E3%82%A8%E3%83%95%E3%83%AC%E3%83%B3.png",
+      "wikiPath": "/octopathsp/%E8%89%BE%E5%BC%97%E4%BC%A6",
+      "wikiTitle": "艾弗伦"
+    },
+    {
+      "name": "肯尼斯",
+      "avatar": "https://patchwiki.biligame.com/images/octopathsp/thumb/8/8c/j173kluj2v2uu4zrdfyjv1x1hgl3opl.png/100px-%E3%82%B1%E3%83%8D%E3%82%B9.png",
+      "wikiPath": "/octopathsp/%E8%82%AF%E5%B0%BC%E6%96%AF",
+      "wikiTitle": "肯尼斯"
+    },
+    {
+      "name": "科尔尼利亚",
+      "avatar": "https://patchwiki.biligame.com/images/octopathsp/thumb/8/8b/elgkaw4ma5ul9ncuhrxdmxlvep66jp5.png/100px-%E3%82%B3%E3%83%AB%E3%83%8D%E3%83%AA%E3%82%A2.png",
+      "wikiPath": "/octopathsp/%E7%A7%91%E5%B0%94%E5%B0%BC%E5%88%A9%E4%BA%9A",
+      "wikiTitle": "科尔尼利亚"
+    },
+    {
+      "name": "杜兰",
+      "avatar": "https://patchwiki.biligame.com/images/octopathsp/thumb/1/17/1j78ysf5016yt4jjdh6sm16eiluwzgg.png/100px-%E3%83%87%E3%83%A5%E3%83%A9%E3%83%B3.png",
+      "wikiPath": "/octopathsp/%E6%9D%9C%E5%85%B0",
+      "wikiTitle": "杜兰"
+    },
+    {
+      "name": "纳尔",
+      "avatar": "https://patchwiki.biligame.com/images/octopathsp/thumb/f/f2/h2x46xjhaz0ggldv9l5hnlvsvv8b6ia.png/100px-%E3%83%8A%E3%83%BC%E3%83%AB.png",
+      "wikiPath": "/octopathsp/%E7%BA%B3%E5%B0%94",
+      "wikiTitle": "纳尔"
+    },
+    {
+      "name": "普利基特",
+      "avatar": "https://patchwiki.biligame.com/images/octopathsp/thumb/5/5f/79mg4cr8esy21rp5fniyllyrms8sd9j.png/100px-%E3%83%96%E3%83%AA%E3%82%B8%E3%83%83%E3%83%88.png",
+      "wikiPath": "/octopathsp/%E6%99%AE%E5%88%A9%E5%9F%BA%E7%89%B9",
+      "wikiTitle": "普利基特"
     }
   ]
 }
