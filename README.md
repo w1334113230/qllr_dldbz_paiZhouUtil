@@ -14,6 +14,7 @@ https://w1334113230.github.io/qllr_dldbz_paiZhouUtil/paiZhouUtil/index.html
 - `paiZhouUtil/styles.css`：样式
 - `paiZhouUtil/app.js`：交互逻辑、状态管理、持久化
 - `paiZhouUtil/vendor/`：离线打包的二维码生成（`qrcode`）与识别（`jsQR`），不依赖外网 CDN
+- `avatar/`：Wiki 角色展示名与头像 URL 数据（见 `avatar/README.md`）；抓取脚本在仓库根 `scrape_wiki_avatars.py`（已 `.gitignore`）
 - `data/`：可选数据目录（我放了示例队伍）
 - `docs/screenshots/`：README 截图目录
 
@@ -54,6 +55,18 @@ python3 -m http.server 8080
 npm install
 npm run vendor
 ```
+
+### 更新 Wiki 头像表（可选）
+
+头像数据在 `avatar/wiki_avatars.json`（由爬虫生成）。爬虫脚本 `scrape_wiki_avatars.py` 已加入 `.gitignore`，需在本机执行：
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install requests beautifulsoup4
+.venv/bin/python scrape_wiki_avatars.py
+```
+
+生成后可将 `avatar/` 下 JSON 与 `wiki_avatar_names.txt` 提交入库。详见 `avatar/README.md`。
 
 ## 操作步骤（建议流程）
 
