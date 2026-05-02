@@ -52,9 +52,7 @@
         <button type="button" id="resetBtn" class="btn-secondary">重置</button>
         <button type="button" id="exportBtn" class="btn-secondary">导出数据</button>
         <button type="button" id="exportQrBtn" class="btn-secondary">导出二维码</button>
-        <button type="button" id="importShareBtn" class="btn-secondary">导入二维码/链接</button>
         <button type="button" id="importBtn" class="btn-secondary">导入数据</button>
-        <input type="file" id="importInput" accept="application/json,.json" class="is-hidden" />
       </div>
     </div>
     <div class="content-row">
@@ -292,16 +290,30 @@
 
   <div class="qr-modal-backdrop is-hidden" id="shareImportModalBackdrop">
     <div class="qr-modal">
-      <h3 class="qr-modal-title">导入分享链接 / 二维码图</h3>
+      <h3 class="qr-modal-title">导入二维码 / 链接 / JSON</h3>
       <p class="qr-modal-tip">
-        可只填链接、只传图片，或两者都填；同时填写时优先使用上方链接。链接支持含 <code>?d=</code> 的地址或 <code>z0</code>/<code>z1</code> 分享码。仅在当前页解析，不会跳转。
+        识别优先级：JSON 文件 &gt; 分享链接或分享码 &gt; 二维码截图。可同时准备多项，将按顺序采用最先一项有效数据。分享内容仅在当前页解析，不会跳转。
       </p>
+      <div class="qr-modal-label">
+        <span>JSON 文件（最高优先级）</span>
+        <div class="share-import-file-row">
+          <input
+            type="file"
+            id="importJsonFile"
+            accept="application/json,.json"
+            class="share-import-file-input"
+            tabindex="-1"
+          />
+          <label for="importJsonFile" class="btn-secondary share-import-file-pick">选择 JSON</label>
+          <span id="importJsonFileName" class="share-import-file-name" aria-live="polite"></span>
+        </div>
+      </div>
       <label class="qr-modal-label">
-        链接或分享码（优先）
-        <textarea id="shareImportTextarea" rows="5" placeholder="https://…/index.html?d=z1…"></textarea>
+        分享链接或分享码
+        <textarea id="shareImportTextarea" rows="4" placeholder="https://…/index.html?d=z1… 或 z0/z1 开头的分享码"></textarea>
       </label>
       <div class="qr-modal-label">
-        <span>二维码截图（无链接或链接无效时使用）</span>
+        <span>二维码截图</span>
         <div class="share-import-file-row">
           <input type="file" id="shareImportQrFile" accept="image/*" class="share-import-file-input" tabindex="-1" />
           <label for="shareImportQrFile" class="btn-secondary share-import-file-pick">选择图片</label>

@@ -775,18 +775,22 @@
     return "";
   }
 
-  function openShareImportModal() {
+  function openImportDataModal() {
     var backdrop = document.getElementById("shareImportModalBackdrop");
     var ta = document.getElementById("shareImportTextarea");
     var fi = document.getElementById("shareImportQrFile");
     var fn = document.getElementById("shareImportFileName");
+    var jf = document.getElementById("importJsonFile");
+    var jn = document.getElementById("importJsonFileName");
     if (ta) ta.value = "";
     if (fi) fi.value = "";
     if (fn) fn.textContent = "";
+    if (jf) jf.value = "";
+    if (jn) jn.textContent = "";
     if (backdrop) backdrop.classList.remove("is-hidden");
   }
 
-  function closeShareImportModal() {
+  function closeImportDataModal() {
     var backdrop = document.getElementById("shareImportModalBackdrop");
     if (backdrop) backdrop.classList.add("is-hidden");
   }
@@ -2410,65 +2414,85 @@
         alert("复制失败：请手动复制文本框内容。");
       }
     });
-    document.getElementById("importShareBtn").addEventListener("click", function () {
-      openShareImportModal();
-    });
     document.getElementById("shareImportQrFile").addEventListener("change", function (e) {
       var fn = document.getElementById("shareImportFileName");
       var f = e.target.files && e.target.files[0];
       if (fn) fn.textContent = f ? f.name : "";
     });
-    document.getElementById("shareImportCancel").addEventListener("click", closeShareImportModal);
+    document.getElementById("importJsonFile").addEventListener("change", function (e) {
+      var jn = document.getElementById("importJsonFileName");
+      var f = e.target.files && e.target.files[0];
+      if (jn) jn.textContent = f ? f.name : "";
+    });
+    document.getElementById("shareImportCancel").addEventListener("click", closeImportDataModal);
     document.getElementById("shareImportModalBackdrop").addEventListener("click", function (e) {
-      if (e.target.id === "shareImportModalBackdrop") closeShareImportModal();
+      if (e.target.id === "shareImportModalBackdrop") closeImportDataModal();
     });
     document.getElementById("shareImportConfirm").addEventListener("click", function () {
+      var jsonIn = document.getElementById("importJsonFile");
+      var jsonFile = jsonIn && jsonIn.files && jsonIn.files[0];
       var ta = document.getElementById("shareImportTextarea");
       var raw = ta ? ta.value : "";
       var tokenFromLink = extractShareTokenFromPaste(raw);
-      var fileInput = document.getElementById("shareImportQrFile");
-      var file = fileInput && fileInput.files && fileInput.files[0];
+      var qrInput = document.getElementById("shareImportQrFile");
+      var qrFile = qrInput && qrInput.files && qrInput.files[0];
 
-      function finishImport(token) {
+      function finishShareImport(token) {
         return applyShareTokenToState(token).then(function () {
           applyCellCapsToDom();
           renderParty();
           rebuildBuffGrid();
           updateStatsPanel(calcSummary());
           renderTeamMetaUI();
-          closeShareImportModal();
+          closeImportDataModal();
         });
       }
 
+      if (jsonFile) {
+        var reader = new FileReader();
+        reader.onload = function () {
+          try {
+            var parsed = JSON.parse(String(reader.result || "{}"));
+            applyImportedData(parsed);
+            renderTeamMetaUI();
+            closeImportDataModal();
+          } catch (err) {
+            alert("JSON 导入失败：格式不正确");
+          }
+        };
+        reader.readAsText(jsonFile, "utf-8");
+        return;
+      }
+
       if (tokenFromLink) {
-        finishImport(tokenFromLink).catch(function (err) {
+        finishShareImport(tokenFromLink).catch(function (err) {
           console.error(err);
           alert("导入失败：数据损坏、格式不对或不兼容。");
         });
         return;
       }
 
-      if (!file) {
-        alert("请粘贴含 ?d= 的链接或分享码，或选择一张二维码截图。");
+      if (qrFile) {
+        decodeQrFromImageFile(qrFile)
+          .then(function (decodedText) {
+            var tokenFromImg = extractShareTokenFromPaste(decodedText);
+            if (!tokenFromImg) {
+              throw new Error("图中识别出的内容不是有效分享链接或分享码");
+            }
+            return finishShareImport(tokenFromImg);
+          })
+          .catch(function (err) {
+            console.error(err);
+            alert(
+              "从图片导入失败：" +
+                (err && err.message ? err.message : String(err)) +
+                "（可改用粘贴链接；若缺少识别库请确认 paiZhouUtil/vendor/jsqr.bundle.js 存在并执行 npm run vendor 重新打包）"
+            );
+          });
         return;
       }
 
-      decodeQrFromImageFile(file)
-        .then(function (decodedText) {
-          var tokenFromImg = extractShareTokenFromPaste(decodedText);
-          if (!tokenFromImg) {
-            throw new Error("图中识别出的内容不是有效分享链接或分享码");
-          }
-          return finishImport(tokenFromImg);
-        })
-        .catch(function (err) {
-          console.error(err);
-          alert(
-            "从图片导入失败：" +
-              (err && err.message ? err.message : String(err)) +
-              "（可改用粘贴链接；若缺少识别库请确认 paiZhouUtil/vendor/jsqr.bundle.js 存在并执行 npm run vendor 重新打包）"
-          );
-        });
+      alert("请选择 JSON 文件、粘贴分享链接/分享码，或选择二维码截图。");
     });
     document.getElementById("resetBtn").addEventListener("click", function () {
       var ok = confirm("确认重置全部数据吗？此操作不可撤销。");
@@ -2477,24 +2501,7 @@
       renderTeamMetaUI();
     });
     document.getElementById("importBtn").addEventListener("click", function () {
-      var input = document.getElementById("importInput");
-      if (input) input.click();
-    });
-    document.getElementById("importInput").addEventListener("change", function (e) {
-      var file = e.target.files && e.target.files[0];
-      if (!file) return;
-      var reader = new FileReader();
-      reader.onload = function () {
-        try {
-          var parsed = JSON.parse(String(reader.result || "{}"));
-          applyImportedData(parsed);
-          renderTeamMetaUI();
-        } catch (err) {
-          alert("导入失败：JSON 格式不正确");
-        }
-      };
-      reader.readAsText(file, "utf-8");
-      e.target.value = "";
+      openImportDataModal();
     });
 
     document.getElementById("turnFilterSlots").addEventListener("click", function (e) {
