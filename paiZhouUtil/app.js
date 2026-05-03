@@ -17,8 +17,6 @@
     selected: { idx: 0, turn: 1, mode: "turn" },
     turnFilter: null,
     modalAvatarData: "",
-    cellCaps: {},
-    capEditorCellId: "",
     draggingIdx: null,
     turnDragging: null,
     preventTurnClick: false,
@@ -701,7 +699,7 @@
 
     var approxBytes = utf8ToBytes(shareUrl).length;
     tip.textContent =
-      "链接固定为 GitHub Pages（v3 gzip，无头像/cellCaps）。UTF-8 约 " +
+      "链接固定为 GitHub Pages（v3 gzip，无头像）。UTF-8 约 " +
       approxBytes +
       " bytes。纠错 L、画布 300px；若仍难扫可缩短装备/备注文字。";
 
@@ -743,7 +741,6 @@
     state.teamNote = expanded.teamNote;
     state.turnFormView = expanded.turnFormView;
     state.roster = normalizeRoster(expanded.roster);
-    state.cellCaps = collectCellCapsFromDom();
     await loadWikiAvatarsOnce();
     syncWikiAvatarsIntoRosterChars();
     saveToStorage();
@@ -843,83 +840,6 @@
     return clampTurnCount(maxTurn);
   }
 
-  function collectCellCapsFromDom() {
-    var caps = {};
-    document.querySelectorAll(".buff-cell[data-cell-id]").forEach(function (cell) {
-      var id = cell.getAttribute("data-cell-id");
-      if (!id) return;
-      var max = Number(cell.getAttribute("data-max") || 30);
-      caps[id] = Number.isFinite(max) && max > 0 ? max : 30;
-    });
-    return caps;
-  }
-
-  function refreshCapButtons() {
-    document.querySelectorAll(".buff-cell[data-cell-id]").forEach(function (cell) {
-      var btn = cell.querySelector(".buff-cap-btn");
-      if (!btn) return;
-      btn.textContent = "上限 " + (cell.getAttribute("data-max") || "30") + "%";
-    });
-  }
-
-  function applyCellCapsToDom() {
-    document.querySelectorAll(".buff-cell[data-cell-id]").forEach(function (cell) {
-      var id = cell.getAttribute("data-cell-id");
-      if (!id) return;
-      var cap = state.cellCaps && state.cellCaps[id];
-      if (typeof cap === "number" && cap > 0) {
-        cell.setAttribute("data-max", String(cap));
-      }
-    });
-    syncBuffLayout(document);
-    refreshCapButtons();
-  }
-
-  function initCapEditors() {
-    document.querySelectorAll(".buff-cell[data-cell-id]").forEach(function (cell) {
-      if (cell.querySelector(".buff-cap-btn")) return;
-      var btn = document.createElement("span");
-      btn.className = "buff-cap-btn";
-      btn.textContent = "上限 " + (cell.getAttribute("data-max") || "30") + "%";
-      cell.appendChild(btn);
-    });
-  }
-
-  function openCapEditor(cellId, currentValue) {
-    var backdrop = document.getElementById("capEditorBackdrop");
-    var input = document.getElementById("capEditorInput");
-    if (!backdrop || !input || !cellId) return;
-    state.capEditorCellId = cellId;
-    input.value = String(currentValue || 30);
-    backdrop.classList.remove("is-hidden");
-    setTimeout(function () {
-      input.focus();
-      input.select();
-    }, 0);
-  }
-
-  function closeCapEditor() {
-    var backdrop = document.getElementById("capEditorBackdrop");
-    if (backdrop) backdrop.classList.add("is-hidden");
-    state.capEditorCellId = "";
-  }
-
-  function saveCapEditorValue() {
-    var input = document.getElementById("capEditorInput");
-    if (!input || !state.capEditorCellId) return;
-    var next = Number(input.value);
-    if (!Number.isFinite(next) || next <= 0) return;
-    var cell = document.querySelector('.buff-cell[data-cell-id="' + state.capEditorCellId + '"]');
-    if (!cell) return;
-    cell.setAttribute("data-max", String(next));
-    if (!state.cellCaps) state.cellCaps = {};
-    state.cellCaps[state.capEditorCellId] = next;
-    syncBuffLayout(document);
-    refreshCapButtons();
-    saveToStorage();
-    closeCapEditor();
-  }
-
   function hashColor(input) {
     var str = input || "未命名";
     var h = 0;
@@ -936,6 +856,26 @@
     scope.querySelectorAll(".buff-segment[data-value]").forEach(function (seg) {
       var v = parseFloat(seg.getAttribute("data-value"), 10);
       if (!isNaN(v) && v >= 0) seg.style.setProperty("--v", String(v));
+    });
+  }
+
+  /** 每格下方只读「上限 xx%」，数据来自扫描后的 data-max（不可编辑） */
+  function initBuffCapLabels() {
+    document.querySelectorAll(".buff-cell[data-cell-id]").forEach(function (cell) {
+      if (cell.querySelector(".buff-cap-label")) return;
+      var span = document.createElement("span");
+      span.className = "buff-cap-label";
+      span.setAttribute("aria-hidden", "true");
+      span.textContent = "上限 " + (cell.getAttribute("data-max") || "30") + "%";
+      cell.appendChild(span);
+    });
+  }
+
+  function refreshBuffCapLabels() {
+    document.querySelectorAll(".buff-cell[data-cell-id] .buff-cap-label").forEach(function (el) {
+      var cell = el.closest(".buff-cell[data-cell-id]");
+      if (!cell) return;
+      el.textContent = "上限 " + (cell.getAttribute("data-max") || "30") + "%";
     });
   }
 
@@ -1037,7 +977,6 @@
           version: 1,
           savedAt: new Date().toISOString(),
           roster: state.roster,
-          cellCaps: state.cellCaps,
           teamName: state.teamName,
           teamNote: state.teamNote,
           turnCount: state.turnCount,
@@ -1054,13 +993,11 @@
       var data = JSON.parse(raw);
       state.turnCount = clampTurnCount((data && data.turnCount) || detectTurnCountFromRawRoster(data && data.roster));
       state.roster = normalizeRoster(data && data.roster);
-      state.cellCaps = data && data.cellCaps && typeof data.cellCaps === "object" ? data.cellCaps : {};
       state.teamName = typeof data.teamName === "string" ? data.teamName : "";
       state.teamNote = typeof data.teamNote === "string" ? data.teamNote : "";
       state.turnFormView = data && data.turnFormView === "detailed" ? "detailed" : "simple";
     } catch (e) {
       state.roster = emptyRoster();
-      state.cellCaps = {};
       state.teamName = "";
       state.teamNote = "";
       state.turnCount = 5;
@@ -1073,7 +1010,6 @@
       version: 1,
       exportedAt: new Date().toISOString(),
       roster: state.roster,
-      cellCaps: state.cellCaps,
       teamName: state.teamName,
       teamNote: state.teamNote,
       turnCount: state.turnCount,
@@ -1093,15 +1029,9 @@
   function applyImportedData(parsed) {
     state.turnCount = clampTurnCount((parsed && parsed.turnCount) || detectTurnCountFromRawRoster(parsed && parsed.roster));
     state.roster = normalizeRoster(parsed && parsed.roster);
-    if (parsed && parsed.cellCaps && typeof parsed.cellCaps === "object" && Object.keys(parsed.cellCaps).length) {
-      state.cellCaps = parsed.cellCaps;
-    } else {
-      state.cellCaps = collectCellCapsFromDom();
-    }
     state.teamName = parsed && typeof parsed.teamName === "string" ? parsed.teamName : "";
     state.teamNote = parsed && typeof parsed.teamNote === "string" ? parsed.teamNote : "";
     state.turnFormView = parsed && parsed.turnFormView === "detailed" ? "detailed" : "simple";
-    applyCellCapsToDom();
     renderParty();
     rebuildBuffGrid();
     updateStatsPanel(calcSummary());
@@ -1113,8 +1043,6 @@
     state.roster = emptyRoster();
     state.selected = { idx: 0, turn: 1, mode: "turn" };
     state.turnFilter = null;
-    // 勿用 collectCellCapsFromDom()：此时 DOM 仍为旧上限，会把 50 等误读回 state
-    state.cellCaps = {};
     state.teamName = "";
     state.teamNote = "";
     state.turnCount = 5;
@@ -1222,10 +1150,8 @@
     return { capByCell: capByCell, rawSumByCell: rawSumByCell, allEffects: allEffects, cellTips: cellTips };
   }
 
-  /** 格子最终生效上限：用户编辑的 data-max 优先，否则为扫描得到的动态上限 */
+  /** 格子收益上限：仅由被动/回合技能里「上限类」效果扫描得到（与 atk 等加成同源），默认 30% */
   function effectiveCapForBuffCell(cellId, capFromScan) {
-    var u = state.cellCaps && state.cellCaps[cellId];
-    if (typeof u === "number" && u > 0) return u;
     if (capFromScan && capFromScan[cellId] !== undefined) return capFromScan[cellId];
     return 30;
   }
@@ -1267,7 +1193,7 @@
       cell.setAttribute("data-tip", cellTips[cellId].join("\n"));
     });
     syncBuffLayout(document);
-    refreshCapButtons();
+    refreshBuffCapLabels();
   }
 
   function calcSummary() {
@@ -2689,7 +2615,6 @@
 
       function finishShareImport(token) {
         return applyShareTokenToState(token).then(function () {
-          applyCellCapsToDom();
           renderParty();
           rebuildBuffGrid();
           updateStatsPanel(calcSummary());
@@ -2795,22 +2720,6 @@
       renderParty();
     });
 
-    document.getElementById("capEditorCancel").addEventListener("click", closeCapEditor);
-    document.getElementById("capEditorSave").addEventListener("click", saveCapEditorValue);
-    document.getElementById("capEditorBackdrop").addEventListener("click", function (e) {
-      if (e.target.id === "capEditorBackdrop") closeCapEditor();
-    });
-    document.getElementById("capEditorInput").addEventListener("keydown", function (e) {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        saveCapEditorValue();
-      }
-      if (e.key === "Escape") {
-        e.preventDefault();
-        closeCapEditor();
-      }
-    });
-
     var charNameInput = document.getElementById("charNameInput");
     var charNameSuggest = document.getElementById("charNameSuggest");
     if (charNameInput && charNameSuggest) {
@@ -2857,12 +2766,7 @@
       .then(function (imported) {
         if (!imported) loadFromStorage();
         initTooltipSystem();
-        initCapEditors();
-        if (!state.cellCaps || !Object.keys(state.cellCaps).length) {
-          state.cellCaps = collectCellCapsFromDom();
-        } else {
-          applyCellCapsToDom();
-        }
+        initBuffCapLabels();
         syncBuffLayout(document);
         initHandlers();
         renderParty();
@@ -2873,12 +2777,7 @@
       .catch(function () {
         loadFromStorage();
         initTooltipSystem();
-        initCapEditors();
-        if (!state.cellCaps || !Object.keys(state.cellCaps).length) {
-          state.cellCaps = collectCellCapsFromDom();
-        } else {
-          applyCellCapsToDom();
-        }
+        initBuffCapLabels();
         syncBuffLayout(document);
         initHandlers();
         renderParty();

@@ -347,75 +347,19 @@ body {
   display: none;
 }
 
-.buff-cap-btn {
-  margin-top: 3px;
-  margin-left: auto;
-  font-size: 10px;
-  color: var(--muted);
-  border: 1px solid transparent;
-  background: transparent;
-  line-height: 1.2;
-  padding: 0 2px;
-  cursor: default;
-  transition: opacity 0.12s ease;
-}
-
-.buff-cap-btn:hover {
-  color: var(--muted);
-}
-
 .buff-cell:hover .buff-cell-track {
   min-height: calc(100% - 2px);
 }
 
-.buff-cell:hover .buff-cap-btn {
-  opacity: 0;
+/* 只读：当前格收益上限（与技能里「上限提升至」扫描结果一致，不可点改） */
+.buff-cap-label {
+  margin-top: 3px;
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--muted);
+  line-height: 1.2;
   pointer-events: none;
-}
-
-.cap-editor-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.45);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 25;
-}
-
-.cap-editor {
-  width: min(300px, 92vw);
-  border: 1px solid #5a4a3a;
-  border-radius: 8px;
-  background: #201910;
-  padding: 12px;
-}
-
-.cap-editor-title {
-  margin: 0 0 10px;
-  font-size: 16px;
-}
-
-.cap-editor-label {
-  display: grid;
-  gap: 6px;
-  font-size: 12px;
-}
-
-.cap-editor-label input {
-  width: 100%;
-  background: #2a2218;
-  color: var(--text);
-  border: 1px solid #5a4d40;
-  border-radius: 4px;
-  padding: 6px 8px;
-}
-
-.cap-editor-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 12px;
+  user-select: none;
 }
 
 /* —— 额外收益区 —— */
