@@ -334,5 +334,15 @@
   <!-- file:// 下无法用 fetch 读本地 JSON；此文件由 npm run wiki-embed 从 avatar/wiki_avatars.min.json 生成 -->
   <script src="wiki_avatars.embed.js"></script>
   <script src="app.js"></script>
+  <!-- 百度统计（仅 https 线上页有效；本地 file 打开一般不会计入） -->
+  <script>
+    var _hmt = _hmt || [];
+    (function () {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1011f1c062fb21a23613e3cddd842ee7";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
 </body>
 </html>
