@@ -5,6 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>大陆的霸者 · 排轴工具</title>
   <link rel="stylesheet" href="styles.css" />
+  <!-- 百度统计：请在统计后台将「网站首页」设为与本页一致的完整 URL（见仓库 README 或 GitHub Pages 地址），勿填 github.io 根路径 -->
+  <script>
+    var _hmt = _hmt || [];
+    (function () {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1011f1c062fb21a23613e3cddd842ee7";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
 </head>
 <body>
   <div class="app">
@@ -334,15 +344,5 @@
   <!-- file:// 下无法用 fetch 读本地 JSON；此文件由 npm run wiki-embed 从 avatar/wiki_avatars.min.json 生成 -->
   <script src="wiki_avatars.embed.js"></script>
   <script src="app.js"></script>
-  <!-- 百度统计（仅 https 线上页有效；本地 file 打开一般不会计入） -->
-  <script>
-    var _hmt = _hmt || [];
-    (function () {
-      var hm = document.createElement("script");
-      hm.src = "https://hm.baidu.com/hm.js?1011f1c062fb21a23613e3cddd842ee7";
-      var s = document.getElementsByTagName("script")[0];
-      s.parentNode.insertBefore(hm, s);
-    })();
-  </script>
 </body>
 </html>
