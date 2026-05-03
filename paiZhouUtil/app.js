@@ -1113,7 +1113,8 @@
     state.roster = emptyRoster();
     state.selected = { idx: 0, turn: 1, mode: "turn" };
     state.turnFilter = null;
-    state.cellCaps = collectCellCapsFromDom();
+    // 勿用 collectCellCapsFromDom()：此时 DOM 仍为旧上限，会把 50 等误读回 state
+    state.cellCaps = {};
     state.teamName = "";
     state.teamNote = "";
     state.turnCount = 5;
@@ -1149,6 +1150,7 @@
       statUlt: summary.ultGauge + "%",
       statCrit: summary.crit ? "是" : "否",
       statBreak: String(summary.breakValue),
+      statFinalMultiplier: summary.finalMultiplier != null ? String(summary.finalMultiplier) : "1.00",
     };
     Object.keys(statMap).forEach(function (id) {
       var el = document.getElementById(id);
@@ -1156,10 +1158,12 @@
     });
   }
 
-  function rebuildBuffGrid() {
+  /** 扫描全队效果：格子上限（含上限类效果）、各格原始累计%、用于 Buff 条渲染的片段与提示 */
+  function collectRosterBuffGridState() {
     var allEffects = [];
     var cellTips = {};
     var capByCell = {};
+    var rawSumByCell = {};
     document.querySelectorAll(".buff-cell[data-cell-id]").forEach(function (cell) {
       var id = cell.getAttribute("data-cell-id");
       if (id) capByCell[id] = 30;
@@ -1200,9 +1204,11 @@
             cellTips[targetCellId].push(title + "，上限提升至" + nextCap + "%");
           } else {
             var normalCellId = eff.type + ":" + eff.zone;
+            var v = Number(eff.value || 0);
+            rawSumByCell[normalCellId] = (rawSumByCell[normalCellId] || 0) + v;
             allEffects.push({
               cellId: normalCellId,
-              value: Number(eff.value || 0),
+              value: v,
               color: char.color || "#4b6a88",
               avatar: char.avatar || "",
               title: title,
@@ -1213,6 +1219,22 @@
         });
       });
     });
+    return { capByCell: capByCell, rawSumByCell: rawSumByCell, allEffects: allEffects, cellTips: cellTips };
+  }
+
+  /** 格子最终生效上限：用户编辑的 data-max 优先，否则为扫描得到的动态上限 */
+  function effectiveCapForBuffCell(cellId, capFromScan) {
+    var u = state.cellCaps && state.cellCaps[cellId];
+    if (typeof u === "number" && u > 0) return u;
+    if (capFromScan && capFromScan[cellId] !== undefined) return capFromScan[cellId];
+    return 30;
+  }
+
+  function rebuildBuffGrid() {
+    var packed = collectRosterBuffGridState();
+    var capByCell = packed.capByCell;
+    var allEffects = packed.allEffects;
+    var cellTips = packed.cellTips;
 
     document.querySelectorAll(".buff-cell").forEach(function (cell) {
       var track = cell.querySelector(".buff-cell-track");
@@ -1220,7 +1242,7 @@
       cell.removeAttribute("data-tip");
       var cid = cell.getAttribute("data-cell-id");
       if (cid && capByCell[cid] !== undefined) {
-        cell.setAttribute("data-max", String(capByCell[cid]));
+        cell.setAttribute("data-max", String(effectiveCapForBuffCell(cid, capByCell)));
       }
     });
 
@@ -1249,7 +1271,7 @@
   }
 
   function calcSummary() {
-    var result = { power: 0, upper: 0, bean: 0, ultGauge: 0, crit: false, breakValue: 0 };
+    var result = { power: 0, upper: 0, bean: 0, ultGauge: 0, crit: false, breakValue: 0, finalMultiplier: "1.00" };
     state.roster.forEach(function (char) {
       getAllSkills(char).forEach(function (skill) {
         result.power = Math.max(result.power, Number(skill.power || 0));
@@ -1262,6 +1284,29 @@
         result.breakValue += Number(skill.chaseBreak || 0);
       });
     });
+    var bg = collectRosterBuffGridState();
+    function clamped(cellId) {
+      var cap = effectiveCapForBuffCell(cellId, bg.capByCell);
+      var raw = bg.rawSumByCell[cellId] || 0;
+      if (raw < 0) raw = 0;
+      return Math.min(raw, cap);
+    }
+    var p = Number(result.power || 0);
+    if (p < 0) p = 0;
+    var u = 0.01;
+    var mult =
+      1.0 *
+      (1 + u * (clamped("atk:active") + clamped("atk:passive") + clamped("def:active") + clamped("def:passive"))) *
+      (1 + u * (clamped("dmg:active") + clamped("dmg:passive"))) *
+      (1 + u * (clamped("res:active") + clamped("res:passive"))) *
+      (1 + u * (clamped("atk:ult") + clamped("def:ult"))) *
+      (1 + u * clamped("dmg:ult")) *
+      (1 + u * clamped("res:ult")) *
+      (1 + u * (clamped("atk:summon") + clamped("def:summon"))) *
+      (1 + u * clamped("dmg:summon")) *
+      (1 + u * clamped("res:summon")) *
+      (1 + u * p);
+    result.finalMultiplier = (Math.round(mult * 100) / 100).toFixed(2);
     return result;
   }
 

@@ -447,6 +447,52 @@ body {
   word-break: break-all;
 }
 
+.extra-final-row {
+  display: flex;
+  justify-content: flex-end;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #4a4036;
+}
+
+.extra-final-hint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-right: 2px;
+  border-radius: 50%;
+  border: 1px solid #8a7658;
+  color: #e8c88a;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: help;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.extra-final-hint:focus-visible {
+  outline: 2px solid #c9a227;
+  outline-offset: 2px;
+}
+
+.extra-final-label {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.extra-final-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: #ffe6bf;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
 /* —— 右侧队伍 —— */
 .party-header {
   display: grid;
@@ -659,7 +705,7 @@ body {
   left: 0;
   top: 0;
   transform: translate(-9999px, -9999px);
-  max-width: 320px;
+  max-width: 420px;
   padding: 6px 8px;
   border-radius: 6px;
   border: 1px solid #6d5a46;
