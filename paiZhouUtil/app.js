@@ -1,5 +1,8 @@
 (function () {
   var STORAGE_KEY = "paiZhouUtilData.v1";
+  var STORAGE_KEY_EXPORT_PRESET_AUTO = "paiZhouUtil.exportPresetAuto.v1";
+  var PRESET_MANAGE_TIP_STATIC =
+    "预设将使用浏览器 indexedDB 数据库保存，若不需要此功能请\"清除预设\"并关闭\"导出队伍时自动录入预设\"。";
   var SKILL_TYPE_CLASS = {
     active: "turn-box--battle",
     ex: "turn-box--ex",
@@ -540,10 +543,14 @@
     });
   }
 
-  function buildSharePayloadV3() {
+  /**
+   * 与「分享队伍」相同的 v3 精简结构；可传入任意已规范化的 roster，不必依赖当前 state。
+   */
+  function buildSharePayloadV3FromSnapshot(roster, turnCount, teamName, teamNote, turnFormView) {
+    var tc = clampTurnCount(turnCount != null ? turnCount : 5);
     var rosterOut = new Array(8).fill(null);
     for (var i = 0; i < 8; i += 1) {
-      var ch = state.roster[i] || {};
+      var ch = (roster && roster[i]) || {};
       var hasName = !!(ch.charName && String(ch.charName).trim());
       var hasNote = !!(ch.charNote && String(ch.charNote).trim());
       var gear = ch.gear || {};
@@ -572,7 +579,7 @@
         var turnsObj = {};
         Object.keys(ch.turns || {}).forEach(function (tk) {
           var tn = Number(tk);
-          if (!Number.isInteger(tn) || tn < 1 || tn > state.turnCount) return;
+          if (!Number.isInteger(tn) || tn < 1 || tn > tc) return;
           var sk = ch.turns[tn];
           var packed = packSkillV3(sk, false);
           if (packed) turnsObj[String(tn)] = packed;
@@ -585,11 +592,21 @@
       rosterOut.pop();
     }
     var payload = { v: 3, k: "pz1", r: rosterOut };
-    if (state.teamName && String(state.teamName).trim()) payload.tn = String(state.teamName).trim();
-    if (state.teamNote && String(state.teamNote).trim()) payload.tm = String(state.teamNote).trim();
-    if (state.turnCount !== 5) payload.tc = state.turnCount;
-    if (state.turnFormView === "detailed") payload.tv = 1;
+    if (teamName && String(teamName).trim()) payload.tn = String(teamName).trim();
+    if (teamNote && String(teamNote).trim()) payload.tm = String(teamNote).trim();
+    if (tc !== 5) payload.tc = tc;
+    if (turnFormView === "detailed") payload.tv = 1;
     return payload;
+  }
+
+  function buildSharePayloadV3() {
+    return buildSharePayloadV3FromSnapshot(
+      state.roster,
+      state.turnCount,
+      state.teamName,
+      state.teamNote,
+      state.turnFormView
+    );
   }
 
   function expandSharePayloadV3(payload) {
@@ -697,11 +714,7 @@
 
     ta.value = shareUrl;
 
-    var approxBytes = utf8ToBytes(shareUrl).length;
-    tip.textContent =
-      "链接固定为 GitHub Pages（v3 gzip，无头像）。UTF-8 约 " +
-      approxBytes +
-      " bytes。纠错 L、画布 300px；若仍难扫可缩短装备/备注文字。";
+    tip.textContent = "推荐使用链接，若难扫或链接过长可缩短装备/备注文字。";
 
     var toDataURL = await loadQrCodeToDataURL();
     if (typeof toDataURL !== "function") {
@@ -790,6 +803,9 @@
     if (fn) fn.textContent = "";
     if (jf) jf.value = "";
     if (jn) jn.textContent = "";
+    refreshImportPresetDropdown().catch(function (e) {
+      console.warn(e);
+    });
     backdrop.classList.remove("is-hidden");
   }
 
@@ -969,9 +985,794 @@
     return roster;
   }
 
+  /** 在不改写全局回合数显示逻辑的前提下，用指定回合数规范 roster（与导入一致） */
+  function normalizeRosterWithTurnCount(rawRoster, turnCount) {
+    var saved = state.turnCount;
+    state.turnCount = clampTurnCount(turnCount);
+    try {
+      return normalizeRoster(rawRoster);
+    } finally {
+      state.turnCount = saved;
+    }
+  }
+
+  var PRESET_IDB_NAME = "paiZhouPresetDB.v1";
+  var PRESET_IDB_VERSION = 2;
+  /** 目录初始化写入的精简队伍（key: fileName） */
+  var PRESET_IDB_STORE = "presetTeams";
+  /** 「导出队伍」自动保存的完整 JSON（key: id） */
+  var PRESET_STORE_SAVED = "savedTeamPresets";
+
+  function openPresetIndexedDB() {
+    return new Promise(function (resolve, reject) {
+      var req = indexedDB.open(PRESET_IDB_NAME, PRESET_IDB_VERSION);
+      req.onerror = function () {
+        reject(req.error || new Error("indexedDB"));
+      };
+      req.onupgradeneeded = function (e) {
+        var db = e.target.result;
+        if (!db.objectStoreNames.contains(PRESET_IDB_STORE)) {
+          db.createObjectStore(PRESET_IDB_STORE, { keyPath: "fileName" });
+        }
+        if (!db.objectStoreNames.contains(PRESET_STORE_SAVED)) {
+          db.createObjectStore(PRESET_STORE_SAVED, { keyPath: "id" });
+        }
+      };
+      req.onsuccess = function () {
+        resolve(req.result);
+      };
+    });
+  }
+
+  function newTeamPresetId() {
+    if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+    return "st-" + Date.now() + "-" + Math.random().toString(36).slice(2, 10);
+  }
+
+  function hashDjb2Hex(str) {
+    var s = String(str || "");
+    var h = 5381;
+    for (var i = 0; i < s.length; i += 1) h = (h * 33) ^ s.charCodeAt(i);
+    return (h >>> 0).toString(16);
+  }
+
+  /** 用「来源队伍的回合上限」规范单个角色，便于与预设对齐 */
+  function normalizeCharSliceForTurnCount(rawChar, turnCount) {
+    var saved = state.turnCount;
+    state.turnCount = clampTurnCount(turnCount);
+    try {
+      var tmp = emptyRoster();
+      tmp[0] = rawChar || {};
+      return normalizeRoster(tmp)[0];
+    } finally {
+      state.turnCount = saved;
+    }
+  }
+
+  function summarizeCharSkillChain(char) {
+    var parts = [];
+    if (char.passiveSkill) parts.push("被动");
+    var turns = char.turns || {};
+    var keys = Object.keys(turns)
+      .map(Number)
+      .filter(function (n) {
+        return Number.isInteger(n);
+      })
+      .sort(function (a, b) {
+        return a - b;
+      });
+    keys.forEach(function (tn) {
+      var sk = turns[tn];
+      if (!sk) return;
+      var st = sk.skillType === "ex" ? "EX" : sk.skillType === "ult" ? "必杀" : "主动";
+      parts.push("T" + tn + ":" + st);
+    });
+    return parts.join("·") || "（无行动）";
+  }
+
+  /**
+   * @param {object} payload 导出 JSON 内容
+   * @param {string} [exportFileName] 与落盘文件名一致（含 .json），用于 IndexedDB 列表展示
+   */
+  /** 清空「目录初始化」与「导出保存」两个对象仓库中的全部记录（全局 IndexedDB，各标签页共用） */
+  function clearAllPresetIndexedDBData() {
+    return openPresetIndexedDB().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction([PRESET_IDB_STORE, PRESET_STORE_SAVED], "readwrite");
+        tx.objectStore(PRESET_IDB_STORE).clear();
+        tx.objectStore(PRESET_STORE_SAVED).clear();
+        tx.oncomplete = function () {
+          db.close();
+          resolve();
+        };
+        tx.onerror = function () {
+          reject(tx.error || new Error("清空 IndexedDB 失败"));
+        };
+      });
+    });
+  }
+
+  /** @param {"saved"|"dir"} kind */
+  function deletePresetIndexedDBEntry(kind, key) {
+    var storeName = kind === "saved" ? PRESET_STORE_SAVED : PRESET_IDB_STORE;
+    var k = String(key || "").trim();
+    if (!k) return Promise.reject(new Error("empty key"));
+    return openPresetIndexedDB().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(storeName, "readwrite");
+        tx.objectStore(storeName).delete(k);
+        tx.oncomplete = function () {
+          db.close();
+          resolve();
+        };
+        tx.onerror = function () {
+          reject(tx.error || new Error("删除失败"));
+        };
+      });
+    });
+  }
+
+  function saveExportedTeamToIndexedDB(payload, exportFileName) {
+    validateTeamExportJson(payload);
+    var id = newTeamPresetId();
+    var savedAt = payload.exportedAt || new Date().toISOString();
+    var fn = String(exportFileName || "").trim();
+    if (!fn) fn = sanitizeFileName(payload.teamName) + ".json";
+    if (!/\.json$/i.test(fn)) fn = fn + ".json";
+    var rec = {
+      id: id,
+      label: fn,
+      savedAt: savedAt,
+      source: "export-save",
+      exportFileName: fn,
+      exportData: payload,
+    };
+    return openPresetIndexedDB().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(PRESET_STORE_SAVED, "readwrite");
+        tx.objectStore(PRESET_STORE_SAVED).put(rec);
+        tx.oncomplete = function () {
+          db.close();
+          resolve();
+        };
+        tx.onerror = function () {
+          reject(tx.error || new Error("写入预设失败"));
+        };
+      });
+    });
+  }
+
+  async function getAllPresetIndexRows() {
+    var db = await openPresetIndexedDB();
+    var saved;
+    var dirs;
+    try {
+      saved = await new Promise(function (resolve, reject) {
+        var tx = db.transaction(PRESET_STORE_SAVED, "readonly");
+        var rq = tx.objectStore(PRESET_STORE_SAVED).getAll();
+        rq.onsuccess = function () {
+          resolve(rq.result || []);
+        };
+        rq.onerror = function () {
+          reject(rq.error);
+        };
+      });
+      dirs = await new Promise(function (resolve, reject) {
+        var tx = db.transaction(PRESET_IDB_STORE, "readonly");
+        var rq = tx.objectStore(PRESET_IDB_STORE).getAll();
+        rq.onsuccess = function () {
+          resolve(rq.result || []);
+        };
+        rq.onerror = function () {
+          reject(rq.error);
+        };
+      });
+    } finally {
+      db.close();
+    }
+    var rows = [];
+    (saved || []).forEach(function (rec) {
+      rows.push({
+        kind: "saved",
+        key: rec.id,
+        value: "saved:" + rec.id,
+        text: (rec.label || rec.id) + "（导出保存）",
+        t: rec.savedAt || "",
+      });
+    });
+    (dirs || []).forEach(function (rec) {
+      rows.push({
+        kind: "dir",
+        key: rec.fileName,
+        value: "dir:" + encodeURIComponent(rec.fileName),
+        text: rec.fileName + "（目录预设）",
+        t: rec.savedAt || "",
+      });
+    });
+    rows.sort(function (a, b) {
+      return String(b.t).localeCompare(String(a.t));
+    });
+    return rows;
+  }
+
+  async function refreshImportPresetDropdown() {
+    var sel = document.getElementById("importPresetSelect");
+    if (!sel) return;
+    sel.innerHTML = '<option value="">（未选预设）</option>';
+    sel.disabled = true;
+    try {
+      var rows = await getAllPresetIndexRows();
+      rows.forEach(function (row) {
+        var opt = document.createElement("option");
+        opt.value = row.value;
+        opt.textContent = row.text;
+        sel.appendChild(opt);
+      });
+    } catch (e) {
+      console.warn(e);
+      var opt = document.createElement("option");
+      opt.value = "";
+      opt.textContent = "（IndexedDB 不可用）";
+      sel.appendChild(opt);
+    }
+    sel.disabled = false;
+  }
+
+  function refreshPresetListIfOpen() {
+    var bd = document.getElementById("presetListModalBackdrop");
+    if (!bd || bd.classList.contains("is-hidden")) return;
+    renderPresetManageList();
+  }
+
+  async function renderPresetManageList() {
+    var ul = document.getElementById("presetManageListItems");
+    if (!ul) return;
+    ul.innerHTML = "";
+    var loading = document.createElement("li");
+    loading.className = "preset-manage-list__loading";
+    loading.textContent = "加载中…";
+    ul.appendChild(loading);
+    try {
+      var rows = await getAllPresetIndexRows();
+      ul.innerHTML = "";
+      if (!rows.length) {
+        var empty = document.createElement("li");
+        empty.className = "preset-manage-list__empty";
+        empty.textContent = "暂无预设队伍";
+        ul.appendChild(empty);
+        return;
+      }
+      rows.forEach(function (row) {
+        var li = document.createElement("li");
+        li.className = "preset-manage-list__item";
+        var span = document.createElement("span");
+        span.className = "preset-manage-list__name";
+        span.textContent = row.text;
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "btn-delete preset-manage-list__del";
+        btn.textContent = "删除";
+        (function (kind, key) {
+          btn.addEventListener("click", function () {
+            var ok = confirm("确定删除该预设？（不会删除本地 json 文件）本操作不可恢复。");
+            if (!ok) return;
+            deletePresetIndexedDBEntry(kind, key)
+              .then(function () {
+                renderPresetManageList();
+                refreshImportPresetDropdown().catch(function (e) {
+                  console.warn(e);
+                });
+              })
+              .catch(function (err) {
+                console.error(err);
+                alert("删除失败：" + (err && err.message ? err.message : String(err)));
+              });
+          });
+        })(row.kind, row.key);
+        li.appendChild(span);
+        li.appendChild(btn);
+        ul.appendChild(li);
+      });
+    } catch (e) {
+      console.warn(e);
+      ul.innerHTML = "";
+      var errEl = document.createElement("li");
+      errEl.className = "preset-manage-list__empty";
+      errEl.textContent = "无法读取预设列表";
+      ul.appendChild(errEl);
+    }
+  }
+
+  function openPresetListModal() {
+    var backdrop = document.getElementById("presetListModalBackdrop");
+    if (!backdrop) return;
+    renderPresetManageList();
+    backdrop.classList.remove("is-hidden");
+  }
+
+  function closePresetListModal() {
+    var backdrop = document.getElementById("presetListModalBackdrop");
+    if (backdrop) backdrop.classList.add("is-hidden");
+  }
+
+  function loadTeamPresetForImport(selectValue) {
+    var v = String(selectValue || "");
+    if (!v) return Promise.reject(new Error("empty"));
+    if (v.indexOf("saved:") === 0) {
+      var sid = v.slice(6);
+      return openPresetIndexedDB().then(function (db) {
+        return new Promise(function (resolve, reject) {
+          var tx = db.transaction(PRESET_STORE_SAVED, "readonly");
+          var rq = tx.objectStore(PRESET_STORE_SAVED).get(sid);
+          rq.onsuccess = function () {
+            db.close();
+            var rec = rq.result;
+            if (!rec || !rec.exportData) {
+              reject(new Error("预设不存在"));
+              return;
+            }
+            resolve(rec.exportData);
+          };
+          rq.onerror = function () {
+            db.close();
+            reject(rq.error);
+          };
+        });
+      });
+    }
+    if (v.indexOf("dir:") === 0) {
+      var fn = decodeURIComponent(v.slice(4));
+      return openPresetIndexedDB().then(function (db) {
+        return new Promise(function (resolve, reject) {
+          var tx = db.transaction(PRESET_IDB_STORE, "readonly");
+          var rq = tx.objectStore(PRESET_IDB_STORE).get(fn);
+          rq.onsuccess = function () {
+            db.close();
+            var rec = rq.result;
+            if (!rec || !rec.simplified) {
+              reject(new Error("预设不存在"));
+              return;
+            }
+            try {
+              var dec = rec.simplified;
+              if (!dec || dec.k !== "pz1") throw new Error("数据格式错误");
+              var expanded =
+                dec.v === 3 ? expandSharePayloadV3(dec) : dec.v === 2 ? expandSharePayloadV2(dec) : null;
+              if (!expanded) throw new Error("版本不支持");
+              resolve({
+                version: 1,
+                roster: expanded.roster,
+                teamName: expanded.teamName,
+                teamNote: expanded.teamNote,
+                turnCount: expanded.turnCount,
+                turnFormView: expanded.turnFormView,
+              });
+            } catch (e2) {
+              reject(e2);
+            }
+          };
+          rq.onerror = function () {
+            db.close();
+            reject(rq.error);
+          };
+        });
+      });
+    }
+    return Promise.reject(new Error("未知预设"));
+  }
+
+  /** 预设行动匹配：忽略中英文间空格差异（如「莉妮特 Ex」与数据内「莉妮特Ex」） */
+  function normalizeCharNameForPresetMatch(s) {
+    return String(s || "")
+      .trim()
+      .replace(/\s+/g, "");
+  }
+
+  function charNamesEqualForPreset(want, candidate) {
+    var a = normalizeCharNameForPresetMatch(want);
+    var b = normalizeCharNameForPresetMatch(candidate);
+    if (!a || !b) return false;
+    return a === b;
+  }
+
+  function refreshCharActionPresetSelect(form) {
+    var sel = document.getElementById("charActionPresetSelect");
+    if (!sel || (state.selected.mode || "") !== "char" || !form || !form.charName) return;
+    var nm = (form.charName.value || "").trim();
+    sel.innerHTML = '<option value="">（加载中…）</option>';
+    sel.disabled = true;
+    collectCharPresetDropdownOptions(nm)
+      .then(function (opts) {
+        if (!sel || (state.selected.mode || "") !== "char") return;
+        sel.innerHTML = '<option value="">（不套用预设行动）</option>';
+        opts.forEach(function (o) {
+          var opt = document.createElement("option");
+          opt.value = o.value;
+          opt.textContent = o.label;
+          sel.appendChild(opt);
+        });
+        sel.disabled = false;
+      })
+      .catch(function (e) {
+        console.warn("预设行动列表加载失败", e);
+        if (sel) {
+          sel.innerHTML = '<option value="">（预设列表不可用）</option>';
+          sel.disabled = false;
+        }
+      });
+  }
+
+  async function collectCharPresetDropdownOptions(charName) {
+    var want = String(charName || "").trim();
+    if (!want) return [];
+    var db;
+    var saved;
+    var dirs;
+    try {
+      db = await openPresetIndexedDB();
+      saved = await new Promise(function (resolve, reject) {
+        var tx = db.transaction(PRESET_STORE_SAVED, "readonly");
+        var rq = tx.objectStore(PRESET_STORE_SAVED).getAll();
+        rq.onsuccess = function () {
+          resolve(rq.result || []);
+        };
+        rq.onerror = function () {
+          reject(rq.error);
+        };
+      });
+      dirs = await new Promise(function (resolve, reject) {
+        var tx = db.transaction(PRESET_IDB_STORE, "readonly");
+        var rq = tx.objectStore(PRESET_IDB_STORE).getAll();
+        rq.onsuccess = function () {
+          resolve(rq.result || []);
+        };
+        rq.onerror = function () {
+          reject(rq.error);
+        };
+      });
+    } finally {
+      if (db) db.close();
+    }
+    var choices = [];
+    var fpSeen = {};
+    function addChoice(teamTag, tc, recRef, slotIdx, rawChar, kind) {
+      var norm = normalizeCharSliceForTurnCount(rawChar, tc);
+      var fpPayload = JSON.stringify({
+        n: norm.charName,
+        o: norm.charNote,
+        g: norm.gear,
+        p: norm.passiveSkill,
+        t: norm.turns,
+      });
+      var fp = hashDjb2Hex(fpPayload);
+      var n = (fpSeen[fp] = (fpSeen[fp] || 0) + 1);
+      var chain = summarizeCharSkillChain(norm);
+      var base = teamTag + "-" + chain;
+      var label = n > 1 ? base + "·" + fp.slice(0, 4) : base;
+      var val =
+        kind === "saved"
+          ? "saved|" + recRef.id + "|" + slotIdx
+          : "dir|" + encodeURIComponent(recRef.fileName) + "|" + slotIdx;
+      choices.push({ value: val, label: label });
+    }
+    saved.forEach(function (rec) {
+      var data = rec.exportData;
+      if (!data || !Array.isArray(data.roster)) return;
+      var tc = clampTurnCount(data.turnCount != null ? data.turnCount : detectTurnCountFromRawRoster(data.roster));
+      var tag = String(rec.label || "").trim() || "保存的预设";
+      data.roster.forEach(function (ch, idx) {
+        if (!ch || !charNamesEqualForPreset(want, ch.charName)) return;
+        addChoice(tag, tc, rec, idx, ch, "saved");
+      });
+    });
+    dirs.forEach(function (rec) {
+      if (!rec.simplified) return;
+      try {
+        var dec = rec.simplified;
+        if (!dec || dec.k !== "pz1") return;
+        var expanded =
+          dec.v === 3 ? expandSharePayloadV3(dec) : dec.v === 2 ? expandSharePayloadV2(dec) : null;
+        if (!expanded) return;
+        var tc = expanded.turnCount;
+        var tag = String(rec.fileName || "目录").replace(/\.json$/i, "");
+        expanded.roster.forEach(function (ch, idx) {
+          if (!ch || !charNamesEqualForPreset(want, ch.charName)) return;
+          addChoice(tag, tc, rec, idx, ch, "dir");
+        });
+      } catch (e) {}
+    });
+    return choices;
+  }
+
+  function loadCharSnapshotFromPresetToken(token) {
+    var p = String(token || "").split("|");
+    if (p[0] === "saved" && p.length === 3) {
+      var rid = p[1];
+      var slot = Number(p[2]);
+      return openPresetIndexedDB().then(function (db) {
+        return new Promise(function (resolve, reject) {
+          var tx = db.transaction(PRESET_STORE_SAVED, "readonly");
+          var rq = tx.objectStore(PRESET_STORE_SAVED).get(rid);
+          rq.onsuccess = function () {
+            db.close();
+            var rec = rq.result;
+            if (!rec || !rec.exportData || !Array.isArray(rec.exportData.roster)) {
+              reject(new Error("无数据"));
+              return;
+            }
+            var tc = clampTurnCount(
+              rec.exportData.turnCount != null
+                ? rec.exportData.turnCount
+                : detectTurnCountFromRawRoster(rec.exportData.roster)
+            );
+            var ch = rec.exportData.roster[slot];
+            resolve(normalizeCharSliceForTurnCount(ch || {}, tc));
+          };
+          rq.onerror = function () {
+            db.close();
+            reject(rq.error);
+          };
+        });
+      });
+    }
+    if (p[0] === "dir" && p.length === 3) {
+      var fn = decodeURIComponent(p[1]);
+      var slot2 = Number(p[2]);
+      return openPresetIndexedDB().then(function (db) {
+        return new Promise(function (resolve, reject) {
+          var tx = db.transaction(PRESET_IDB_STORE, "readonly");
+          var rq = tx.objectStore(PRESET_IDB_STORE).get(fn);
+          rq.onsuccess = function () {
+            db.close();
+            var rec = rq.result;
+            if (!rec || !rec.simplified) {
+              reject(new Error("无数据"));
+              return;
+            }
+            try {
+              var dec = rec.simplified;
+              var expanded =
+                dec.v === 3 ? expandSharePayloadV3(dec) : dec.v === 2 ? expandSharePayloadV2(dec) : null;
+              if (!expanded) throw new Error("无法展开");
+              var tc = expanded.turnCount;
+              var ch = expanded.roster[slot2];
+              resolve(normalizeCharSliceForTurnCount(ch || {}, tc));
+            } catch (e2) {
+              reject(e2);
+            }
+          };
+          rq.onerror = function () {
+            db.close();
+            reject(rq.error);
+          };
+        });
+      });
+    }
+    return Promise.reject(new Error("bad token"));
+  }
+
+  function mergeCharSnapshotIntoSlot(idx, normChar) {
+    var prev = state.roster[idx] || {};
+    var prevAvatar = String(prev.avatar || "").trim();
+    state.roster[idx] = JSON.parse(JSON.stringify(normChar));
+    state.roster[idx].color = hashColor(state.roster[idx].charName || "未命名");
+    var mergedAvatar = String(state.roster[idx].avatar || "").trim();
+    if (!mergedAvatar && prevAvatar) {
+      state.roster[idx].avatar = prevAvatar;
+    }
+  }
+
+  function syncBasicCharFormFromSlot(form, idx) {
+    var char = ensureChar(idx);
+    form.charName.value = char.charName || "";
+    form.charNote.value = char.charNote || "";
+    var gear = char.gear || {};
+    form.gearWeapon.value = gear.weapon || "";
+    form.gearHelmet.value = gear.helmet || "";
+    form.gearArmor.value = gear.armor || "";
+    form.gearAcc1.value = gear.acc1 || "";
+    form.gearAcc2.value = gear.acc2 || "";
+    form.gearAcc3.value = gear.acc3 || "";
+    form.gearSkill1.value = gear.skill1 || "";
+    form.gearSkill2.value = gear.skill2 || "";
+    form.gearSkill3.value = gear.skill3 || "";
+    form.gearSkill4.value = gear.skill4 || "";
+    state.modalAvatarData = char.avatar || "";
+    setAvatarPreview(state.modalAvatarData);
+  }
+
+  /** @returns {Promise<number>} 写入条数 */
+  function presetIndexedDBPutAll(records) {
+    return openPresetIndexedDB().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(PRESET_IDB_STORE, "readwrite");
+        var store = tx.objectStore(PRESET_IDB_STORE);
+        records.forEach(function (rec) {
+          store.put(rec);
+        });
+        tx.oncomplete = function () {
+          db.close();
+          resolve(records.length);
+        };
+        tx.onerror = function () {
+          reject(tx.error || new Error("写入 IndexedDB 失败"));
+        };
+      });
+    });
+  }
+
+  function validateTeamExportJson(parsed) {
+    if (!parsed || typeof parsed !== "object") throw new Error("根节点必须是 JSON 对象");
+    if (!Array.isArray(parsed.roster)) throw new Error('缺少 "roster" 数组（需与「导出队伍」格式一致）');
+  }
+
+  /** 将工具导出的队伍 JSON 转为「分享队伍」同款 v3 精简对象 */
+  function teamExportJsonToSharePayloadV3(parsed) {
+    validateTeamExportJson(parsed);
+    var tc = clampTurnCount(
+      parsed.turnCount != null ? parsed.turnCount : detectTurnCountFromRawRoster(parsed.roster)
+    );
+    var rosterNorm = normalizeRosterWithTurnCount(parsed.roster, tc);
+    var teamName = typeof parsed.teamName === "string" ? parsed.teamName : "";
+    var teamNote = typeof parsed.teamNote === "string" ? parsed.teamNote : "";
+    var turnFormView = parsed.turnFormView === "detailed" ? "detailed" : "simple";
+    return buildSharePayloadV3FromSnapshot(rosterNorm, tc, teamName, teamNote, turnFormView);
+  }
+
+  async function presetInitFromDirectory() {
+    if (typeof window.showDirectoryPicker !== "function") {
+      alert("当前环境不支持选择文件夹（需要 Chrome / Edge 等支持文件系统访问 API 的浏览器）。");
+      return;
+    }
+    var dirHandle;
+    try {
+      dirHandle = await window.showDirectoryPicker({ mode: "read" });
+    } catch (e) {
+      if (e && e.name === "AbortError") return;
+      console.error(e);
+      alert("无法打开目录：" + (e && e.message ? e.message : String(e)));
+      return;
+    }
+    var dirLabel = dirHandle.name || "";
+    var records = [];
+    var errors = [];
+    try {
+      for await (var entry of dirHandle.values()) {
+        if (entry.kind !== "file") continue;
+        var name = String(entry.name || "");
+        if (!/\.json$/i.test(name)) continue;
+        var file;
+        try {
+          file = await entry.getFile();
+        } catch (e1) {
+          errors.push(name + "：无法读取文件");
+          continue;
+        }
+        var text;
+        try {
+          text = await file.text();
+        } catch (e2) {
+          errors.push(name + "：读取失败");
+          continue;
+        }
+        var parsed;
+        try {
+          parsed = JSON.parse(text);
+        } catch (e3) {
+          errors.push(name + "：JSON 解析失败");
+          continue;
+        }
+        var simplified;
+        try {
+          simplified = teamExportJsonToSharePayloadV3(parsed);
+        } catch (e4) {
+          errors.push(name + "：" + (e4 && e4.message ? e4.message : String(e4)));
+          continue;
+        }
+        records.push({
+          fileName: name,
+          simplified: simplified,
+          savedAt: new Date().toISOString(),
+          source: "dir-init",
+        });
+      }
+    } catch (e) {
+      console.error(e);
+      alert("遍历目录失败：" + (e && e.message ? e.message : String(e)));
+      return;
+    }
+    if (!records.length) {
+      alert(
+        errors.length
+          ? "未导入任何文件。\n" + errors.slice(0, 8).join("\n") + (errors.length > 8 ? "\n…" : "")
+          : "所选目录下没有 .json 文件（仅扫描当前文件夹内一层，不含子文件夹）。"
+      );
+      return;
+    }
+    try {
+      await presetIndexedDBPutAll(records);
+    } catch (e) {
+      console.error(e);
+      alert("写入 IndexedDB 失败：" + (e && e.message ? e.message : String(e)));
+      return;
+    }
+    var tip = document.getElementById("presetManageTip");
+    var msg =
+      (dirLabel ? "目录「" + dirLabel + "」：" : "") +
+      "已写入 " +
+      records.length +
+      " 个精简队伍（IndexedDB " +
+      PRESET_IDB_NAME +
+      " → " +
+      PRESET_IDB_STORE +
+      "）。";
+    if (errors.length) msg += "\n跳过 " + errors.length + " 个文件：\n" + errors.slice(0, 8).join("\n");
+    if (errors.length > 8) msg += "\n…";
+    if (tip) tip.textContent = msg;
+    alert(
+      (dirLabel ? "「" + dirLabel + "」" : "") +
+        "已导入 " +
+        records.length +
+        " 个队伍到 IndexedDB。" +
+        (errors.length ? " 部分文件未导入（见预设管理说明）。" : "")
+    );
+    refreshPresetListIfOpen();
+  }
+
+  function readExportPresetAutoEnabled() {
+    try {
+      var v = sessionStorage.getItem(STORAGE_KEY_EXPORT_PRESET_AUTO);
+      if (v === null || v === "") {
+        var leg = localStorage.getItem(STORAGE_KEY_EXPORT_PRESET_AUTO);
+        if (leg !== null && leg !== "") {
+          try {
+            sessionStorage.setItem(STORAGE_KEY_EXPORT_PRESET_AUTO, leg);
+            localStorage.removeItem(STORAGE_KEY_EXPORT_PRESET_AUTO);
+          } catch (e2) {}
+          v = leg;
+        }
+      }
+      if (v === null || v === "") return true;
+      return v === "1" || v === "true";
+    } catch (e) {
+      return true;
+    }
+  }
+
+  function writeExportPresetAutoEnabled(on) {
+    try {
+      sessionStorage.setItem(STORAGE_KEY_EXPORT_PRESET_AUTO, on ? "1" : "0");
+    } catch (e) {}
+  }
+
+  function syncPresetExportAutoToggleUI() {
+    var btn = document.getElementById("presetExportAutoToggle");
+    if (!btn) return;
+    var on = readExportPresetAutoEnabled();
+    btn.setAttribute("aria-checked", on ? "true" : "false");
+    btn.classList.toggle("toggle-switch-btn--on", on);
+    var text = btn.querySelector(".toggle-switch-btn__text");
+    if (text) text.textContent = on ? "已开启" : "已关闭";
+  }
+
+  function openPresetManageModal() {
+    var backdrop = document.getElementById("presetManageModalBackdrop");
+    var tip = document.getElementById("presetManageTip");
+    if (!backdrop) return;
+    if (tip) tip.textContent = PRESET_MANAGE_TIP_STATIC;
+    syncPresetExportAutoToggleUI();
+    backdrop.classList.remove("is-hidden");
+  }
+
+  function closePresetManageModal() {
+    var backdrop = document.getElementById("presetManageModalBackdrop");
+    if (backdrop) backdrop.classList.add("is-hidden");
+    closePresetListModal();
+  }
+
   function saveToStorage() {
     try {
-      localStorage.setItem(
+      sessionStorage.setItem(
         STORAGE_KEY,
         JSON.stringify({
           version: 1,
@@ -988,7 +1789,17 @@
 
   function loadFromStorage() {
     try {
-      var raw = localStorage.getItem(STORAGE_KEY);
+      var raw = sessionStorage.getItem(STORAGE_KEY);
+      if (!raw) {
+        var legacy = localStorage.getItem(STORAGE_KEY);
+        if (legacy) {
+          try {
+            sessionStorage.setItem(STORAGE_KEY, legacy);
+            localStorage.removeItem(STORAGE_KEY);
+          } catch (e2) {}
+          raw = legacy;
+        }
+      }
       if (!raw) return;
       var data = JSON.parse(raw);
       state.turnCount = clampTurnCount((data && data.turnCount) || detectTurnCountFromRawRoster(data && data.roster));
@@ -1005,7 +1816,13 @@
     }
   }
 
-  function exportData() {
+  /**
+   * 导出队伍 JSON。仅在用户通过「另存为」完成写入后写入 IndexedDB（取消保存不会写入）。
+   * 不支持 showSaveFilePicker 的环境仍用 <a download>，此时无法判断是否取消，故不同步 IndexedDB。
+   * 预设管理中关闭「导出队伍时自动录入预设」时，即使完成另存为也不写入 IndexedDB。
+   * 预设 IndexedDB 为浏览器全局库，多标签页共用；与 sessionStorage 中的队伍草稿相互独立。
+   */
+  async function exportData() {
     var payload = {
       version: 1,
       exportedAt: new Date().toISOString(),
@@ -1015,15 +1832,44 @@
       turnCount: state.turnCount,
       turnFormView: state.turnFormView,
     };
-    var blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    var exportFileName = sanitizeFileName(state.teamName) + ".json";
+    var jsonText = JSON.stringify(payload, null, 2);
+
+    if (typeof window.showSaveFilePicker === "function") {
+      try {
+        var handle = await window.showSaveFilePicker({
+          suggestedName: exportFileName,
+          types: [
+            {
+              description: "JSON",
+              accept: { "application/json": [".json"] },
+            },
+          ],
+        });
+        var writable = await handle.createWritable();
+        await writable.write(new Blob([jsonText], { type: "application/json" }));
+        await writable.close();
+        var savedName = handle.name || exportFileName;
+        if (readExportPresetAutoEnabled()) await saveExportedTeamToIndexedDB(payload, savedName);
+      } catch (e) {
+        if (e && e.name === "AbortError") return;
+        console.error(e);
+        alert("保存队伍 JSON 失败：" + (e && e.message ? e.message : String(e)));
+      }
+      return;
+    }
+
+    var blob = new Blob([jsonText], { type: "application/json" });
     var url = URL.createObjectURL(blob);
     var a = document.createElement("a");
     a.href = url;
-    a.download = sanitizeFileName(state.teamName) + ".json";
+    a.download = exportFileName;
     document.body.appendChild(a);
     a.click();
     a.remove();
-    URL.revokeObjectURL(url);
+    window.setTimeout(function () {
+      URL.revokeObjectURL(url);
+    }, 0);
   }
 
   function applyImportedData(parsed) {
@@ -1048,7 +1894,7 @@
     state.turnCount = 5;
     state.turnFormView = "simple";
     try {
-      localStorage.removeItem(STORAGE_KEY);
+      sessionStorage.removeItem(STORAGE_KEY);
     } catch (e) {}
     document.querySelectorAll(".turn-filter-box").forEach(function (item) {
       item.classList.remove("is-active");
@@ -1529,11 +2375,13 @@
     var avatarField = document.getElementById("avatarField");
     var statsFieldsWrap = document.getElementById("statsFieldsWrap");
     var resetCellBtn = document.getElementById("resetCellBtn");
+    var charActionPresetWrap = document.getElementById("charActionPresetWrap");
     if (!modal || !form || !rows || !err || !turnWrap || !turnValue || !modalTitle || !basicFieldsWrap || !charExtraSection || !charExtraToggle || !charExtraBody || !effectHeader || !actionRow2 || !actionRow3 || !actionRow4 || !actionRow5 || !turnViewToggle || !skillNameField || !charNoteField || !skillTypeField || !bpField || !shieldBreakField || !summonField || !avatarField || !statsFieldsWrap || !resetCellBtn) return;
 
     err.textContent = "";
     rows.innerHTML = "";
     hideCharNameSuggest();
+    hideSkillNameSuggest();
 
     var char = ensureChar(idx);
     var skill = mode === "passive" ? char.passiveSkill : char.turns[turn];
@@ -1601,7 +2449,10 @@
       resetCellBtn.classList.remove("is-hidden");
       resetCellBtn.textContent = "重置该格";
       rows.innerHTML = "";
+      if (charActionPresetWrap) charActionPresetWrap.classList.remove("is-hidden");
+      refreshCharActionPresetSelect(form);
     } else if (mode === "passive") {
+      if (charActionPresetWrap) charActionPresetWrap.classList.add("is-hidden");
       modalTitle.textContent = "被动及装备录入";
       turnWrap.classList.add("is-hidden");
       turnViewToggle.classList.add("is-hidden");
@@ -1624,6 +2475,7 @@
       resetCellBtn.classList.remove("is-hidden");
       resetCellBtn.textContent = "重置该被动";
     } else {
+      if (charActionPresetWrap) charActionPresetWrap.classList.add("is-hidden");
       modalTitle.textContent = "回合行动信息录入";
       turnWrap.classList.remove("is-hidden");
       turnViewToggle.classList.remove("is-hidden");
@@ -1679,12 +2531,14 @@
     loadWikiAvatarsOnce().then(function () {
       if (mode === "char") tryWikiAvatarFromCharNameInput(form);
     });
+    if (mode === "turn") loadWikiActiveSkillsOnce();
   }
 
   function closeModal() {
     var modal = document.getElementById("skillModal");
     if (modal) modal.classList.add("is-hidden");
     hideCharNameSuggest();
+    hideSkillNameSuggest();
   }
 
   function setAvatarPreview(dataUrl) {
@@ -1826,6 +2680,9 @@
   var wikiAvatarByName = null;
   var wikiAvatarsLoadPromise = null;
   var wikiCharNameKeys = null;
+  /** 角色展示名 -> 国服主动技能名列表（来自 Wiki 爬取，与头像数据同源键名） */
+  var wikiActiveSkillsByCharacter = null;
+  var wikiSkillsLoadPromise = null;
 
   function ingestWikiAvatarsPayload(data) {
     var by = data && data.byName && typeof data.byName === "object" ? data.byName : {};
@@ -1834,6 +2691,29 @@
       return a.localeCompare(b, "zh-Hans-CN");
     });
     return by;
+  }
+
+  function ingestWikiSkillsPayload(data) {
+    var bc = data && data.byCharacter && typeof data.byCharacter === "object" ? data.byCharacter : {};
+    wikiActiveSkillsByCharacter = {};
+    Object.keys(bc).forEach(function (charName) {
+      var meta = bc[charName];
+      var arr = meta && meta.activeSkillsZh;
+      if (!Array.isArray(arr)) return;
+      var seen = {};
+      var out = [];
+      arr.forEach(function (s) {
+        var t = String(s || "").trim();
+        if (!t || seen[t]) return;
+        seen[t] = true;
+        out.push(t);
+      });
+      out.sort(function (a, b) {
+        return a.localeCompare(b, "zh-Hans-CN");
+      });
+      wikiActiveSkillsByCharacter[charName] = out;
+    });
+    return wikiActiveSkillsByCharacter;
   }
 
   /** 与 index.html 同目录的 JSON（http(s) 部署时可选拷贝，便于单目录托管） */
@@ -1848,16 +2728,59 @@
     return list;
   }
 
-  function fetchWikiAvatarsJsonSequential(urls, idx) {
-    if (idx >= urls.length) return Promise.reject(new Error("wiki json"));
+  function fetchJsonUrlsSequential(urls, idx) {
+    if (idx >= urls.length) return Promise.reject(new Error("json"));
     return fetch(urls[idx])
       .then(function (res) {
         if (!res.ok) throw new Error(String(res.status));
         return res.json();
       })
       .catch(function () {
-        return fetchWikiAvatarsJsonSequential(urls, idx + 1);
+        return fetchJsonUrlsSequential(urls, idx + 1);
       });
+  }
+
+  function wikiActiveSkillsFetchUrls() {
+    var list = [];
+    try {
+      list.push(new URL("./wiki_active_skills_zh.min.json", window.location.href).href);
+    } catch (e1) {}
+    try {
+      list.push(new URL("../skills/wiki_active_skills_zh.min.json", window.location.href).href);
+    } catch (e2) {}
+    return list;
+  }
+
+  /**
+   * 1) wiki_active_skills_zh.embed.js → window.__PAIZHOU_WIKI_ACTIVE_SKILLS_ZH__（含 file://）。
+   * 2) 否则 http(s) fetch：同目录 wiki_active_skills_zh.min.json → 上级 skills/。
+   */
+  function loadWikiActiveSkillsOnce() {
+    if (wikiSkillsLoadPromise) return wikiSkillsLoadPromise;
+    var pre = typeof window.__PAIZHOU_WIKI_ACTIVE_SKILLS_ZH__ === "object" && window.__PAIZHOU_WIKI_ACTIVE_SKILLS_ZH__;
+    if (pre && typeof pre.byCharacter === "object") {
+      wikiSkillsLoadPromise = Promise.resolve(ingestWikiSkillsPayload(pre));
+      return wikiSkillsLoadPromise;
+    }
+    if (String(window.location.protocol || "").toLowerCase() === "file:") {
+      wikiActiveSkillsByCharacter = null;
+      wikiSkillsLoadPromise = Promise.resolve(null);
+      return wikiSkillsLoadPromise;
+    }
+    var urls = wikiActiveSkillsFetchUrls();
+    if (!urls.length) {
+      wikiActiveSkillsByCharacter = null;
+      wikiSkillsLoadPromise = Promise.resolve(null);
+      return wikiSkillsLoadPromise;
+    }
+    wikiSkillsLoadPromise = fetchJsonUrlsSequential(urls, 0)
+      .then(ingestWikiSkillsPayload)
+      .catch(function () {
+        wikiActiveSkillsByCharacter = null;
+        wikiSkillsLoadPromise = null;
+        return null;
+      });
+    return wikiSkillsLoadPromise;
   }
 
   /**
@@ -1884,7 +2807,7 @@
       wikiAvatarsLoadPromise = Promise.resolve(null);
       return wikiAvatarsLoadPromise;
     }
-    wikiAvatarsLoadPromise = fetchWikiAvatarsJsonSequential(urls, 0)
+    wikiAvatarsLoadPromise = fetchJsonUrlsSequential(urls, 0)
       .then(ingestWikiAvatarsPayload)
       .catch(function () {
         wikiAvatarByName = null;
@@ -1897,9 +2820,32 @@
   function getWikiAvatarRowForName(name) {
     var n = String(name || "").trim();
     if (!n || !wikiAvatarByName) return null;
+    function rowOk(r) {
+      return r && typeof r.avatar === "string" && !!String(r.avatar).trim();
+    }
     var row = wikiAvatarByName[n];
-    if (!row || typeof row.avatar !== "string" || !row.avatar.trim()) return null;
-    return row;
+    if (rowOk(row)) return row;
+    var compact = n.replace(/\s+/g, "");
+    if (compact !== n) {
+      row = wikiAvatarByName[compact];
+      if (rowOk(row)) return row;
+    }
+    var k;
+    for (k in wikiAvatarByName) {
+      if (!Object.prototype.hasOwnProperty.call(wikiAvatarByName, k)) continue;
+      if (String(k).replace(/\s+/g, "") === compact) {
+        row = wikiAvatarByName[k];
+        if (rowOk(row)) return row;
+      }
+    }
+    for (k in wikiAvatarByName) {
+      if (!Object.prototype.hasOwnProperty.call(wikiAvatarByName, k)) continue;
+      row = wikiAvatarByName[k];
+      if (!rowOk(row)) continue;
+      var wt = row.wikiTitle != null ? String(row.wikiTitle) : "";
+      if (wt === n || wt.replace(/\s+/g, "") === compact) return row;
+    }
+    return null;
   }
 
   function hideCharNameSuggest() {
@@ -1907,6 +2853,98 @@
     if (!ul) return;
     ul.classList.add("is-hidden");
     ul.innerHTML = "";
+  }
+
+  function hideSkillNameSuggest() {
+    var ul = document.getElementById("skillNameSuggest");
+    if (!ul) return;
+    ul.classList.add("is-hidden");
+    ul.innerHTML = "";
+  }
+
+  function shouldOfferSkillNameSuggest() {
+    if ((state.selected.mode || "") !== "turn") return false;
+    var form = document.getElementById("skillForm");
+    if (!form || !form.skillType) return false;
+    return form.skillType.value === "active";
+  }
+
+  /** 与 byCharacter 键一致；若展示名与 Wiki 条目标题不一致，用头像行 wikiTitle 再查一次。 */
+  function getWikiActiveSkillNamesForChar(charNameTrimmed) {
+    var cn = String(charNameTrimmed || "").trim();
+    if (!cn || !wikiActiveSkillsByCharacter) return [];
+    var arr = wikiActiveSkillsByCharacter[cn];
+    if (Array.isArray(arr) && arr.length) return arr;
+    var compact = cn.replace(/\s+/g, "");
+    if (compact !== cn) {
+      arr = wikiActiveSkillsByCharacter[compact];
+      if (Array.isArray(arr) && arr.length) return arr;
+    }
+    var row = getWikiAvatarRowForName(cn);
+    if (row && row.wikiTitle) {
+      var wt = String(row.wikiTitle);
+      var alt = wikiActiveSkillsByCharacter[wt];
+      if (Array.isArray(alt) && alt.length) return alt;
+      if (wt.replace(/\s+/g, "") !== wt) {
+        alt = wikiActiveSkillsByCharacter[wt.replace(/\s+/g, "")];
+        if (Array.isArray(alt) && alt.length) return alt;
+      }
+    }
+    return [];
+  }
+
+  function filterWikiSkillNamesForSuggest(charName, query, limit) {
+    var lim = typeof limit === "number" ? limit : 40;
+    var q = String(query || "").trim();
+    var keys = getWikiActiveSkillNamesForChar(charName);
+    if (!keys.length) return [];
+    if (!q) return keys.slice(0, lim);
+    var lower = q.toLowerCase();
+    var hits = [];
+    var i;
+    for (i = 0; i < keys.length; i += 1) {
+      var k = keys[i];
+      if (k.indexOf(q) >= 0 || k.toLowerCase().indexOf(lower) >= 0) hits.push(k);
+    }
+    hits.sort(function (a, b) {
+      var ap = a.indexOf(q) === 0 ? 0 : 1;
+      var bp = b.indexOf(q) === 0 ? 0 : 1;
+      if (ap !== bp) return ap - bp;
+      return a.localeCompare(b, "zh-Hans-CN");
+    });
+    return hits.slice(0, lim);
+  }
+
+  function renderSkillNameSuggest(query) {
+    var ul = document.getElementById("skillNameSuggest");
+    var form = document.getElementById("skillForm");
+    if (!ul || !form) return;
+    if (!shouldOfferSkillNameSuggest()) {
+      hideSkillNameSuggest();
+      return;
+    }
+    var cn = (form.charName && form.charName.value || "").trim();
+    if (!cn || !wikiActiveSkillsByCharacter) {
+      ul.innerHTML = "";
+      ul.classList.add("is-hidden");
+      return;
+    }
+    var names = filterWikiSkillNamesForSuggest(cn, query, 40);
+    if (!names.length) {
+      ul.innerHTML = "";
+      ul.classList.add("is-hidden");
+      return;
+    }
+    ul.innerHTML = "";
+    names.forEach(function (nm) {
+      var li = document.createElement("li");
+      li.className = "char-name-suggest-item";
+      li.setAttribute("role", "option");
+      li.dataset.skillName = nm;
+      li.textContent = nm;
+      ul.appendChild(li);
+    });
+    ul.classList.remove("is-hidden");
   }
 
   function filterWikiCharNamesForSuggest(query, limit) {
@@ -1950,14 +2988,15 @@
     ul.classList.remove("is-hidden");
   }
 
-  /** 角色录入弹窗：名称与 Wiki 完全一致时用库内头像 URL（不覆盖已有自定义头像） */
+  /** 角色录入弹窗：名称可匹配 Wiki 时用库内头像；名称从「莉妮特」改为「莉妮特 Ex」等时应替换 Wiki 图（用户粘贴的 data URL 不覆盖） */
   function tryWikiAvatarFromCharNameInput(form) {
     if ((state.selected.mode || "") !== "char" || !form || !form.charName) return;
     var nm = (form.charName.value || "").trim();
     var row = getWikiAvatarRowForName(nm);
     if (!row) return;
     var cur = String(state.modalAvatarData || "").trim();
-    if (cur) return;
+    if (/^data:image\//i.test(cur)) return;
+    if (cur === row.avatar) return;
     state.modalAvatarData = row.avatar;
     setAvatarPreview(row.avatar);
   }
@@ -2390,6 +3429,7 @@
     document.getElementById("skillForm").skillType.addEventListener("change", function (e) {
       var form = document.getElementById("skillForm");
       var skillType = e.target.value;
+      hideSkillNameSuggest();
       if (form.summonName.value.trim() === "") {
         if (skillType === "ult") form.skillName.value = "必杀";
         if (skillType === "ex") form.skillName.value = "EX";
@@ -2450,6 +3490,7 @@
       err.textContent = "";
 
       if (mode === "char") {
+        tryWikiAvatarFromCharNameInput(form);
         var onlyName = (form.charName.value || "").trim();
         if (!onlyName) {
           err.textContent = "角色名不能为空。";
@@ -2555,13 +3596,87 @@
       closeModal();
     });
 
-    document.getElementById("exportBtn").addEventListener("click", exportData);
+    document.getElementById("exportBtn").addEventListener("click", function () {
+      exportData().catch(function (err) {
+        if (err && err.name === "AbortError") return;
+        console.error(err);
+        alert("导出队伍失败：" + (err && err.message ? err.message : String(err)));
+      });
+    });
     document.getElementById("exportQrBtn").addEventListener("click", function () {
       openQrExportModal().catch(function (err) {
         console.error(err);
-        alert("导出二维码失败：" + (err && err.message ? err.message : String(err)));
+        alert("分享队伍失败：" + (err && err.message ? err.message : String(err)));
       });
     });
+    var presetManageBtn = document.getElementById("presetManageBtn");
+    if (presetManageBtn) presetManageBtn.addEventListener("click", openPresetManageModal);
+    var presetManageForm = document.getElementById("presetManageForm");
+    if (presetManageForm) {
+      presetManageForm.addEventListener("submit", function (e) {
+        e.preventDefault();
+      });
+    }
+    var presetExportAutoToggle = document.getElementById("presetExportAutoToggle");
+    if (presetExportAutoToggle) {
+      presetExportAutoToggle.addEventListener("click", function () {
+        var currentlyOn = readExportPresetAutoEnabled();
+        var nextOn = !currentlyOn;
+        var msg = nextOn ? "将来导出队伍时将自动保存为预设。" : "将来导出队伍时将不再保存为预设。";
+        if (!confirm(msg)) return;
+        writeExportPresetAutoEnabled(nextOn);
+        syncPresetExportAutoToggleUI();
+      });
+    }
+    syncPresetExportAutoToggleUI();
+    var presetInitBtn = document.getElementById("presetInitBtn");
+    if (presetInitBtn) {
+      presetInitBtn.addEventListener("click", function () {
+        presetInitFromDirectory().catch(function (err) {
+          console.error(err);
+          alert("初始化预设失败：" + (err && err.message ? err.message : String(err)));
+        });
+      });
+    }
+    var presetClearBtn = document.getElementById("presetClearBtn");
+    if (presetClearBtn) {
+      presetClearBtn.addEventListener("click", function () {
+        var ok = confirm("确定删除预设？（不会删除本地 json 文件）本操作不可恢复。");
+        if (!ok) return;
+        clearAllPresetIndexedDBData()
+          .then(function () {
+            var tip = document.getElementById("presetManageTip");
+            if (tip) tip.textContent = "已清空全部预设数据（" + PRESET_IDB_NAME + "）。";
+            alert("已清空全部预设。");
+            refreshPresetListIfOpen();
+            refreshImportPresetDropdown().catch(function (e) {
+              console.warn(e);
+            });
+          })
+          .catch(function (err) {
+            console.error(err);
+            alert("清空失败：" + (err && err.message ? err.message : String(err)));
+          });
+      });
+    }
+    var presetManageListBtn = document.getElementById("presetManageListBtn");
+    if (presetManageListBtn) presetManageListBtn.addEventListener("click", openPresetListModal);
+    var presetListModalClose = document.getElementById("presetListModalClose");
+    if (presetListModalClose) presetListModalClose.addEventListener("click", closePresetListModal);
+    var presetListModalBackdrop = document.getElementById("presetListModalBackdrop");
+    if (presetListModalBackdrop) {
+      presetListModalBackdrop.addEventListener("click", function (e) {
+        if (e.target.id === "presetListModalBackdrop") closePresetListModal();
+      });
+    }
+    var presetManageClose = document.getElementById("presetManageClose");
+    if (presetManageClose) presetManageClose.addEventListener("click", closePresetManageModal);
+    var presetManageBackdrop = document.getElementById("presetManageModalBackdrop");
+    if (presetManageBackdrop) {
+      presetManageBackdrop.addEventListener("click", function (e) {
+        if (e.target.id === "presetManageModalBackdrop") closePresetManageModal();
+      });
+    }
     document.getElementById("qrModalClose").addEventListener("click", closeQrExportModal);
     document.getElementById("qrModalBackdrop").addEventListener("click", function (e) {
       if (e.target.id === "qrModalBackdrop") closeQrExportModal();
@@ -2591,6 +3706,12 @@
         var jn = document.getElementById("importJsonFileName");
         var f = e.target.files && e.target.files[0];
         if (jn) jn.textContent = f ? f.name : "";
+      });
+    }
+    var shareImportForm = document.getElementById("shareImportForm");
+    if (shareImportForm) {
+      shareImportForm.addEventListener("submit", function (e) {
+        e.preventDefault();
       });
     }
     var shareImportCancel = document.getElementById("shareImportCancel");
@@ -2639,6 +3760,22 @@
         return;
       }
 
+      var importPresetSelectEl = document.getElementById("importPresetSelect");
+      var presetPick = importPresetSelectEl && importPresetSelectEl.value;
+      if (presetPick) {
+        loadTeamPresetForImport(presetPick)
+          .then(function (parsed) {
+            applyImportedData(parsed);
+            renderTeamMetaUI();
+            closeImportDataModal();
+          })
+          .catch(function (err) {
+            console.error(err);
+            alert("预设队伍加载失败：" + (err && err.message ? err.message : String(err)));
+          });
+        return;
+      }
+
       if (tokenFromLink) {
         finishShareImport(tokenFromLink).catch(function (err) {
           console.error(err);
@@ -2667,8 +3804,36 @@
         return;
       }
 
-      alert("请选择 JSON 文件、粘贴分享链接/分享码，或选择二维码截图。");
+      alert("请选择 JSON 文件、IndexedDB 预设、粘贴分享链接/分享码，或选择二维码截图。");
     });
+    var charActionPresetSel = document.getElementById("charActionPresetSelect");
+    if (charActionPresetSel) {
+      charActionPresetSel.addEventListener("change", function () {
+        var v = charActionPresetSel.value;
+        if (!v) return;
+        var form = document.getElementById("skillForm");
+        if (!form) return;
+        if ((state.selected.mode || "") !== "char") return;
+        loadCharSnapshotFromPresetToken(v)
+          .then(function (norm) {
+            mergeCharSnapshotIntoSlot(state.selected.idx, norm);
+            syncBasicCharFormFromSlot(form, state.selected.idx);
+            saveToStorage();
+            renderParty();
+            rebuildBuffGrid();
+            updateStatsPanel(calcSummary());
+            return refreshWikiAvatarsOnRosterThenRerender();
+          })
+          .then(function () {
+            charActionPresetSel.value = v;
+          })
+          .catch(function (err) {
+            console.error(err);
+            alert("套用预设行动失败：" + (err && err.message ? err.message : String(err)));
+            charActionPresetSel.value = "";
+          });
+      });
+    }
     document.getElementById("resetBtn").addEventListener("click", function () {
       var ok = confirm("确认重置全部数据吗？此操作不可撤销。");
       if (!ok) return;
@@ -2730,10 +3895,14 @@
         });
       });
       charNameInput.addEventListener("input", function () {
+        if ((state.selected.mode || "") === "turn") hideSkillNameSuggest();
         loadWikiAvatarsOnce().then(function () {
           renderCharNameSuggest(charNameInput.value);
           var form = document.getElementById("skillForm");
-          if (form && (state.selected.mode || "") === "char") tryWikiAvatarFromCharNameInput(form);
+          if (form && (state.selected.mode || "") === "char") {
+            tryWikiAvatarFromCharNameInput(form);
+            refreshCharActionPresetSelect(form);
+          }
         });
       });
       charNameInput.addEventListener("blur", function () {
@@ -2754,11 +3923,50 @@
         if (form && form.charName) form.charName.value = name;
         hideCharNameSuggest();
         loadWikiAvatarsOnce().then(function () {
-          if (form) tryWikiAvatarFromCharNameInput(form);
+          if (form) {
+            tryWikiAvatarFromCharNameInput(form);
+            if ((state.selected.mode || "") === "char") refreshCharActionPresetSelect(form);
+          }
         });
       });
     }
+
+    var skillNameInput = document.getElementById("skillNameInput");
+    var skillNameSuggest = document.getElementById("skillNameSuggest");
+    if (skillNameInput && skillNameSuggest) {
+      var skillNameBlurTimer = null;
+      skillNameInput.addEventListener("focus", function () {
+        loadWikiActiveSkillsOnce().then(function () {
+          renderSkillNameSuggest(skillNameInput.value);
+        });
+      });
+      skillNameInput.addEventListener("input", function () {
+        loadWikiActiveSkillsOnce().then(function () {
+          renderSkillNameSuggest(skillNameInput.value);
+        });
+      });
+      skillNameInput.addEventListener("blur", function () {
+        if (skillNameBlurTimer) clearTimeout(skillNameBlurTimer);
+        skillNameBlurTimer = window.setTimeout(function () {
+          skillNameBlurTimer = null;
+          hideSkillNameSuggest();
+        }, 200);
+      });
+      skillNameSuggest.addEventListener("mousedown", function (e) {
+        var li = e.target.closest(".char-name-suggest-item");
+        if (!li) return;
+        e.preventDefault();
+        var sn = (li.dataset && li.dataset.skillName) || (li.textContent || "").trim();
+        if (!sn) return;
+        skillNameInput.value = sn;
+        var form = document.getElementById("skillForm");
+        if (form && form.skillName) form.skillName.value = sn;
+        hideSkillNameSuggest();
+      });
+    }
+
     loadWikiAvatarsOnce();
+    loadWikiActiveSkillsOnce();
   }
 
   document.addEventListener("DOMContentLoaded", function () {

@@ -9,15 +9,16 @@ OUT_NAME="大陆的霸者排轴工具-${STAMP}-release.zip"
 TMP="$(mktemp -d)"
 PKG="$TMP/大陆的霸者排轴工具"
 
-mkdir -p "$PKG/paiZhouUtil/vendor" "$PKG/avatar"
+mkdir -p "$PKG/paiZhouUtil/vendor" "$PKG/avatar" "$PKG/skills"
 
-cp paiZhouUtil/index.html paiZhouUtil/app.js paiZhouUtil/styles.css paiZhouUtil/wiki_avatars.embed.js "$PKG/paiZhouUtil/"
+cp paiZhouUtil/index.html paiZhouUtil/app.js paiZhouUtil/styles.css paiZhouUtil/wiki_avatars.embed.js paiZhouUtil/wiki_active_skills_zh.embed.js "$PKG/paiZhouUtil/"
 cp -R paiZhouUtil/vendor/*.js "$PKG/paiZhouUtil/vendor/" 2>/dev/null || {
   echo "错误: paiZhouUtil/vendor 下缺少 qrcode.bundle.js / jsqr.bundle.js，请在仓库根执行 npm install && npm run vendor" >&2
   exit 1
 }
 
 cp avatar/wiki_avatars.min.json "$PKG/avatar/"
+cp skills/wiki_active_skills_zh.min.json "$PKG/skills/"
 
 # 可选：附带仓库内示例队伍 JSON（体积大，默认不包含）
 if [[ "${INCLUDE_DATA_SAMPLES:-}" == "1" ]]; then
@@ -38,7 +39,7 @@ cat > "$PKG/使用说明.txt" << 'EOF'
 
 【重要】
   · 请保留解压后的完整文件夹，不要只复制「paiZhouUtil」到外面单独使用。
-    需要与「paiZhouUtil」同级存在「avatar」文件夹，程序才能正常匹配 Wiki 头像。
+    需要与「paiZhouUtil」同级存在「avatar」「skills」文件夹，程序才能匹配 Wiki 头像与主动技能候选。
   · 若只拷贝一个 index.html，会缺少样式、脚本和二维码功能，无法正常使用。
 
 【数据保存在哪】

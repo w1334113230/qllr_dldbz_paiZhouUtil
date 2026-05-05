@@ -60,9 +60,10 @@
       </div>
       <div class="top-actions">
         <button type="button" id="resetBtn" class="btn-secondary">重置</button>
-        <button type="button" id="exportBtn" class="btn-secondary">导出数据</button>
-        <button type="button" id="exportQrBtn" class="btn-secondary">导出二维码</button>
-        <button type="button" id="importBtn" class="btn-secondary">导入数据</button>
+        <button type="button" id="exportBtn" class="btn-secondary">导出队伍</button>
+        <button type="button" id="exportQrBtn" class="btn-secondary">分享队伍</button>
+        <button type="button" id="importBtn" class="btn-secondary">导入队伍</button>
+        <button type="button" id="presetManageBtn" class="btn-secondary">预设管理</button>
       </div>
     </div>
     <div class="content-row">
@@ -159,6 +160,11 @@
           </div>
         </label>
         <label id="charNoteField">备注<input name="charNote" maxlength="80" placeholder="可填写角色备注" /></label>
+        <label id="charActionPresetWrap" class="is-hidden">预设行动
+          <select id="charActionPresetSelect" name="charActionPreset" aria-label="从各预设队伍套用该角色行动">
+            <option value="">（不套用预设行动）</option>
+          </select>
+        </label>
         <div id="avatarField" class="avatar-field is-hidden">
           <span>头像图片</span>
           <div class="avatar-picker-row">
@@ -197,7 +203,12 @@
             <option value="ult">必杀</option>
           </select>
         </label>
-        <label id="skillNameField">技能名<input name="skillName" required maxlength="30" /></label>
+        <label id="skillNameField" class="char-name-field">技能名
+          <div class="char-name-wrap">
+            <input id="skillNameInput" name="skillName" required maxlength="30" autocomplete="off" />
+            <ul id="skillNameSuggest" class="char-name-suggest is-hidden" role="listbox" aria-label="主动技能候选"></ul>
+          </div>
+        </label>
         <label id="bpField">BP
           <select name="bp">
             <option value="0" selected>0</option>
@@ -284,7 +295,7 @@
 
   <div class="qr-modal-backdrop is-hidden" id="qrModalBackdrop">
     <div class="qr-modal">
-      <h3 class="qr-modal-title">导出二维码（测试版）</h3>
+      <h3 class="qr-modal-title">分享队伍</h3>
       <p class="qr-modal-tip" id="qrModalTip"></p>
       <div class="qr-modal-img-wrap">
         <img id="qrModalImg" alt="队伍分享二维码" />
@@ -300,46 +311,146 @@
     </div>
   </div>
 
-  <div class="qr-modal-backdrop is-hidden" id="shareImportModalBackdrop">
-    <div class="qr-modal">
-      <h3 class="qr-modal-title">导入二维码 / 链接 / JSON</h3>
-      <p class="qr-modal-tip">
-        识别优先级：JSON 文件 &gt; 分享链接或分享码 &gt; 二维码截图。可同时准备多项，将按顺序采用最先一项有效数据。分享内容仅在当前页解析，不会跳转。
+  <div class="qr-modal-backdrop is-hidden" id="presetManageModalBackdrop">
+    <div class="qr-modal qr-modal--preset">
+      <h3 class="qr-modal-title">预设管理</h3>
+      <p class="qr-modal-tip" id="presetManageTip">
+        预设将使用浏览器 indexedDB 数据库保存，若不需要此功能请"清除预设"并关闭"导出队伍时自动录入预设"。
       </p>
-      <div class="qr-modal-label">
-        <span>JSON 文件（最高优先级）</span>
-        <div class="share-import-file-row">
-          <input
-            type="file"
-            id="importJsonFile"
-            accept="application/json,.json"
-            class="share-import-file-input"
-            tabindex="-1"
-          />
-          <label for="importJsonFile" class="btn-secondary share-import-file-pick">选择 JSON</label>
-          <span id="importJsonFileName" class="share-import-file-name" aria-live="polite"></span>
+      <form class="share-import-form" id="presetManageForm">
+        <div class="share-import-field">
+          <span class="share-import-field-label share-import-field-label--with-hint">
+            初始化预设
+            <span
+              class="share-import-field-hint"
+              data-tip="选择队伍json文件所在目录"
+              role="img"
+              aria-label="选择队伍json文件所在目录"
+              tabindex="0"
+            >
+              <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false">
+                <path
+                  fill="currentColor"
+                  d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"
+                />
+              </svg>
+            </span>
+          </span>
+          <div class="share-import-field-control">
+            <button type="button" id="presetInitBtn" class="btn-secondary">初始化预设</button>
+          </div>
         </div>
-      </div>
-      <label class="qr-modal-label">
-        分享链接或分享码
-        <textarea id="shareImportTextarea" rows="4" placeholder="https://…/index.html?d=z1… 或 z0/z1 开头的分享码"></textarea>
-      </label>
-      <div class="qr-modal-label">
-        <span>二维码截图</span>
-        <div class="share-import-file-row">
-          <input type="file" id="shareImportQrFile" accept="image/*" class="share-import-file-input" tabindex="-1" />
-          <label for="shareImportQrFile" class="btn-secondary share-import-file-pick">选择图片</label>
-          <span id="shareImportFileName" class="share-import-file-name" aria-live="polite"></span>
+        <div class="share-import-field">
+          <span class="share-import-field-label">清空预设</span>
+          <div class="share-import-field-control">
+            <button type="button" id="presetClearBtn" class="btn-secondary">清空预设</button>
+          </div>
         </div>
+        <div class="share-import-field">
+          <span class="share-import-field-label">管理预设</span>
+          <div class="share-import-field-control">
+            <button type="button" id="presetManageListBtn" class="btn-secondary">管理预设</button>
+          </div>
+        </div>
+        <div class="share-import-field">
+          <span class="share-import-field-label" id="presetExportAutoLabel">导出队伍时自动录入预设</span>
+          <div class="share-import-field-control">
+            <button
+              type="button"
+              id="presetExportAutoToggle"
+              class="toggle-switch-btn toggle-switch-btn--on"
+              role="switch"
+              aria-checked="true"
+              aria-labelledby="presetExportAutoLabel"
+            >
+              <span class="toggle-switch-btn__track" aria-hidden="true"><span class="toggle-switch-btn__thumb"></span></span>
+              <span class="toggle-switch-btn__text">已开启</span>
+            </button>
+          </div>
+        </div>
+      </form>
+      <div class="qr-modal-actions">
+        <button type="button" id="presetManageClose" class="btn-primary">关闭</button>
       </div>
+    </div>
+  </div>
+
+  <div class="qr-modal-backdrop qr-modal-backdrop--list is-hidden" id="presetListModalBackdrop">
+    <div class="qr-modal qr-modal--preset-list">
+      <h3 class="qr-modal-title">预设队伍列表</h3>
+      <p class="qr-modal-tip">以下为浏览器内（IndexedDB）已保存的预设，删除后不可恢复（不会删除您电脑上的 json 文件）。</p>
+      <ul id="presetManageListItems" class="preset-manage-list"></ul>
+      <div class="qr-modal-actions">
+        <button type="button" id="presetListModalClose" class="btn-primary">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="qr-modal-backdrop is-hidden" id="shareImportModalBackdrop">
+    <div class="qr-modal qr-modal--import">
+      <h3 class="qr-modal-title">导入队伍</h3>
+      <p class="qr-modal-tip">识别优先级：JSON 文件 &gt; 预设 &gt; 分享链接 &gt; 二维码。</p>
+      <form class="share-import-form" id="shareImportForm">
+        <div class="share-import-field">
+          <span class="share-import-field-label" id="importJsonFieldLabel">导入 JSON</span>
+          <div class="share-import-field-control">
+            <div class="share-import-file-row">
+              <input
+                type="file"
+                id="importJsonFile"
+                accept="application/json,.json"
+                class="share-import-file-input"
+                tabindex="-1"
+                aria-labelledby="importJsonFieldLabel"
+              />
+              <label for="importJsonFile" class="btn-secondary share-import-file-pick">选择 JSON</label>
+              <span id="importJsonFileName" class="share-import-file-name" aria-live="polite"></span>
+            </div>
+          </div>
+        </div>
+        <div class="share-import-field">
+          <label class="share-import-field-label" for="importPresetSelect">导入预设</label>
+          <div class="share-import-field-control">
+            <select id="importPresetSelect" class="import-preset-select" aria-label="从 IndexedDB 选择预设队伍"></select>
+          </div>
+        </div>
+        <div class="share-import-field">
+          <label class="share-import-field-label" for="shareImportTextarea">导入链接</label>
+          <div class="share-import-field-control">
+            <textarea
+              id="shareImportTextarea"
+              rows="4"
+              placeholder="https://…/index.html?d=z1… 或 z0/z1 开头的分享码"
+            ></textarea>
+          </div>
+        </div>
+        <div class="share-import-field">
+          <span class="share-import-field-label" id="importQrFieldLabel">导入二维码</span>
+          <div class="share-import-field-control">
+            <div class="share-import-file-row">
+              <input
+                type="file"
+                id="shareImportQrFile"
+                accept="image/*"
+                class="share-import-file-input"
+                tabindex="-1"
+                aria-labelledby="importQrFieldLabel"
+              />
+              <label for="shareImportQrFile" class="btn-secondary share-import-file-pick">选择图片</label>
+              <span id="shareImportFileName" class="share-import-file-name" aria-live="polite"></span>
+            </div>
+          </div>
+        </div>
+      </form>
       <div class="qr-modal-actions">
         <button type="button" id="shareImportCancel" class="btn-secondary">取消</button>
         <button type="button" id="shareImportConfirm" class="btn-primary">导入</button>
       </div>
     </div>
   </div>
-  <!-- file:// 下无法用 fetch 读本地 JSON；此文件由 npm run wiki-embed 从 avatar/wiki_avatars.min.json 生成 -->
+  <!-- file:// 下无法用 fetch 读本地 JSON：wiki-embed / wiki-skills-embed 分别从 avatar、skills 的 min.json 生成 -->
   <script src="wiki_avatars.embed.js"></script>
+  <script src="wiki_active_skills_zh.embed.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

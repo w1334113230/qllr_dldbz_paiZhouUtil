@@ -15,6 +15,7 @@ https://w1334113230.github.io/qllr_dldbz_paiZhouUtil/paiZhouUtil/index.html
 - `paiZhouUtil/app.js`：交互逻辑、状态管理、持久化
 - `paiZhouUtil/vendor/`：离线打包的二维码生成（`qrcode`）与识别（`jsQR`），不依赖外网 CDN
 - `avatar/`：Wiki 角色展示名与头像 URL 数据（见 `avatar/README.md`）；抓取脚本在仓库根 `scrape_wiki_avatars.py`（已 `.gitignore`）
+- `skills/`：各角色国服主动技能名列表（见 `skills/README.md`），由 `scrape_wiki_active_skills.py` 生成，`npm run wiki-skills-embed` 写入页面 embed
 - `data/`：可选数据目录（我放了示例队伍）
 - `docs/screenshots/`：README 截图目录
 
@@ -67,6 +68,15 @@ python3 -m venv .venv
 ```
 
 生成后可将 `avatar/` 下 JSON 与 `wiki_avatar_names.txt` 提交入库。详见 `avatar/README.md`。
+
+### 更新 Wiki 主动技能候选（可选）
+
+```bash
+.venv/bin/python scrape_wiki_active_skills.py
+npm run wiki-skills-embed
+```
+
+将 `skills/` 下 JSON 与 `paiZhouUtil/wiki_active_skills_zh.embed.js` 一并提交。详见 `skills/README.md`。
 
 ## 操作步骤（建议流程）
 

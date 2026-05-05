@@ -920,10 +920,46 @@ body {
   font-size: 12px;
 }
 
+/* 角色名 / 技能名：label 用 flex+gap，避免「wrap 与 input 各 margin-top:4px」与隔壁 select 不一致 */
+.form-grid label.char-name-field {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+
 .char-name-field .char-name-wrap {
   position: relative;
   width: 100%;
-  margin-top: 4px;
+  margin-top: 0;
+  height: 36px;
+  box-sizing: border-box;
+}
+
+.char-name-field .char-name-wrap input {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+  margin-top: 0;
+  line-height: 1.25;
+  field-sizing: fixed;
+  box-sizing: border-box;
+}
+
+/* 技能录入第二行：四类控件同一竖直节奏，与 char-name-field 一致 */
+.form-grid--row2 > label {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.form-grid--row2 > label > select,
+.form-grid--row2 > label > input,
+.form-grid--row2 > label > .char-name-wrap {
+  margin-top: 0;
 }
 
 .char-name-suggest {
@@ -1034,6 +1070,7 @@ body {
   gap: 8px;
 }
 
+/* 固定 height + field-sizing：否则 Chrome / Safari 下 input 与 select 内建高度会不一致 */
 .form-grid input,
 .form-grid select,
 .effect-row select,
@@ -1044,7 +1081,13 @@ body {
   color: var(--text);
   border: 1px solid #5a4d40;
   border-radius: 4px;
-  padding: 6px 8px;
+  padding: 5px 8px;
+  font-size: 13px;
+  line-height: 1.25;
+  height: 36px;
+  min-height: 36px;
+  max-height: 36px;
+  field-sizing: fixed;
 }
 
 .form-grid select,
@@ -1053,7 +1096,7 @@ body {
   -webkit-appearance: none;
   -moz-appearance: none;
   background-image: linear-gradient(45deg, transparent 50%, #cdbba7 50%), linear-gradient(135deg, #cdbba7 50%, transparent 50%);
-  background-position: calc(100% - 14px) calc(50% - 2px), calc(100% - 8px) calc(50% - 2px);
+  background-position: calc(100% - 14px) center, calc(100% - 8px) center;
   background-size: 6px 6px, 6px 6px;
   background-repeat: no-repeat;
   padding-right: 24px;
@@ -1227,6 +1270,10 @@ body {
   display: none;
 }
 
+.qr-modal-backdrop--list {
+  z-index: 28;
+}
+
 .qr-modal {
   width: min(720px, 100%);
   border: 1px solid #5a4a3a;
@@ -1280,6 +1327,214 @@ body {
   line-height: 1.35;
 }
 
+/* 导入队伍：四列表单项 */
+.share-import-form {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.share-import-field {
+  display: grid;
+  grid-template-columns: minmax(76px, 100px) minmax(0, 1fr);
+  gap: 8px 14px;
+  align-items: start;
+  padding: 12px 0;
+}
+
+.share-import-field + .share-import-field {
+  border-top: 1px solid rgba(90, 74, 58, 0.45);
+}
+
+.share-import-field-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #cdbba7;
+  line-height: 1.35;
+  padding-top: 7px;
+  margin: 0;
+}
+
+.share-import-field-label--with-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.share-import-field-hint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid #8a7658;
+  color: #e8c88a;
+  cursor: help;
+  flex-shrink: 0;
+  user-select: none;
+  line-height: 0;
+}
+
+.share-import-field-hint svg {
+  display: block;
+}
+
+.share-import-field-hint:focus-visible {
+  outline: 2px solid #c9a227;
+  outline-offset: 2px;
+}
+
+label.share-import-field-label {
+  cursor: pointer;
+}
+
+.share-import-field-control {
+  min-width: 0;
+}
+
+.share-import-field-control textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  min-height: 72px;
+  background: #2a2218;
+  color: var(--text);
+  border: 1px solid #5a4d40;
+  border-radius: 4px;
+  padding: 8px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.share-import-field-control .import-preset-select,
+.share-import-field-control #importPresetSelect {
+  margin-top: 0;
+}
+
+@media (max-width: 520px) {
+  .share-import-field {
+    grid-template-columns: 1fr;
+    padding: 10px 0;
+  }
+
+  .share-import-field-label {
+    padding-top: 0;
+  }
+}
+
+/* 预设管理：导出时自动录入开关 */
+.toggle-switch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+}
+
+.toggle-switch-btn__track {
+  position: relative;
+  width: 44px;
+  height: 26px;
+  border-radius: 13px;
+  background: #3a3228;
+  border: 1px solid #5a4d40;
+  flex-shrink: 0;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.toggle-switch-btn--on .toggle-switch-btn__track {
+  background: #5a472e;
+  border-color: #7a5c38;
+}
+
+.toggle-switch-btn__thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #f0e6d6;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  transition: transform 0.15s ease;
+}
+
+.toggle-switch-btn--on .toggle-switch-btn__thumb {
+  transform: translateX(20px);
+}
+
+.toggle-switch-btn__text {
+  font-size: 13px;
+  color: #cdbba7;
+  min-width: 3em;
+  text-align: left;
+}
+
+.toggle-switch-btn:focus-visible {
+  outline: 2px solid #c49040;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.qr-modal--preset-list {
+  width: min(520px, 100%);
+}
+
+.preset-manage-list {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  max-height: min(50vh, 360px);
+  overflow: auto;
+  border: 1px solid #5a4d40;
+  border-radius: 6px;
+  background: #2a2218;
+}
+
+.preset-manage-list__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(90, 77, 64, 0.45);
+  font-size: 12px;
+}
+
+.preset-manage-list__item:last-child {
+  border-bottom: 0;
+}
+
+.preset-manage-list__name {
+  min-width: 0;
+  flex: 1;
+  word-break: break-word;
+  color: var(--text);
+}
+
+.preset-manage-list__del {
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.preset-manage-list__empty,
+.preset-manage-list__loading {
+  margin: 0;
+  padding: 14px 12px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+  list-style: none;
+}
+
 .share-import-file-row {
   position: relative;
   display: flex;
@@ -1323,4 +1578,22 @@ body {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.qr-modal-actions--stack {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+#importPresetSelect,
+.import-preset-select {
+  width: 100%;
+  margin-top: 4px;
+  box-sizing: border-box;
+  background: #2a2218;
+  color: var(--text);
+  border: 1px solid #5a4d40;
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 13px;
 }
