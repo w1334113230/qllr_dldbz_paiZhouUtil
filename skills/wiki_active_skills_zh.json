@@ -2,8 +2,8 @@
   "schema": "octopathsp-wiki-active-skills-zh-1",
   "description": "各角色 Wiki 详情页 #chinese-active 内主动技能中文名（用于排轴工具检索）",
   "sourceAvatarIndex": "avatar/wiki_avatars.json",
-  "fetchedAt": "2026-05-05T01:21:01.090538+00:00",
-  "characterCount": 274,
+  "fetchedAt": "2026-05-21T05:23:40.273159+00:00",
+  "characterCount": 275,
   "byCharacter": {
     "提米诺斯Ex": {
       "activeSkillsZh": [
@@ -4505,6 +4505,26 @@
       "wikiUrl": "https://wiki.biligame.com/octopathsp/%E6%99%AE%E5%88%A9%E5%9F%BA%E7%89%B9",
       "wikiTitle": "普利基特",
       "count": 8
+    },
+    "弗恩": {
+      "activeSkillsZh": [
+        "全体刚射",
+        "紧急包扎",
+        "反制陷阱",
+        "屏息伏击",
+        "遗恨爆鸣",
+        "鹰眼",
+        "维舒贝尔的过去",
+        "维舒贝尔的未来",
+        "恸哭终楔",
+        "无声挽歌"
+      ],
+      "wikiUrl": "https://wiki.biligame.com/octopathsp/%E5%BC%97%E6%81%A9",
+      "wikiTitle": "弗恩",
+      "count": 10
     }
-  }
+  },
+  "warnings": [
+    "手动补录角色 弗恩 主动技能（Wiki 角色页，2026-05-21T05:23:40.273159+00:00）"
+  ]
 }

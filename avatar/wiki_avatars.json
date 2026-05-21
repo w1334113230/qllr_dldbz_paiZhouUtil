@@ -16,8 +16,8 @@
     }
   ],
   "mergePolicy": "同名时以后序来源为准（旅人图鉴 覆盖 旅人图鉴2）",
-  "fetchedAt": "2026-05-02T05:04:24.762264+00:00",
-  "count": 274,
+  "fetchedAt": "2026-05-21T05:23:40.273159+00:00",
+  "count": 275,
   "byName": {
     "提米诺斯Ex": {
       "avatar": "https://patchwiki.biligame.com/images/octopathsp/thumb/4/42/c56qjegvv7flfgspmi1ddv3bqqkn4xd.png/100px-%E3%83%86%E3%83%A1%E3%83%8E%E3%82%B9Ex.png",
@@ -1388,6 +1388,11 @@
       "avatar": "https://patchwiki.biligame.com/images/octopathsp/thumb/5/5f/79mg4cr8esy21rp5fniyllyrms8sd9j.png/100px-%E3%83%96%E3%83%AA%E3%82%B8%E3%83%83%E3%83%88.png",
       "wikiPath": "/octopathsp/%E6%99%AE%E5%88%A9%E5%9F%BA%E7%89%B9",
       "wikiTitle": "普利基特"
+    },
+    "弗恩": {
+      "avatar": "https://patchwiki.biligame.com/images/octopathsp/thumb/9/9d/0lgv0ova82miloc3kxfbrxecwi9kbkq.png/100px-%E3%83%95%E3%82%A7%E3%83%B3.png",
+      "wikiPath": "/octopathsp/%E5%BC%97%E6%81%A9",
+      "wikiTitle": "弗恩"
     }
   },
   "list": [
@@ -3034,6 +3039,15 @@
       "avatar": "https://patchwiki.biligame.com/images/octopathsp/thumb/5/5f/79mg4cr8esy21rp5fniyllyrms8sd9j.png/100px-%E3%83%96%E3%83%AA%E3%82%B8%E3%83%83%E3%83%88.png",
       "wikiPath": "/octopathsp/%E6%99%AE%E5%88%A9%E5%9F%BA%E7%89%B9",
       "wikiTitle": "普利基特"
+    },
+    {
+      "name": "弗恩",
+      "avatar": "https://patchwiki.biligame.com/images/octopathsp/thumb/9/9d/0lgv0ova82miloc3kxfbrxecwi9kbkq.png/100px-%E3%83%95%E3%82%A7%E3%83%B3.png",
+      "wikiPath": "/octopathsp/%E5%BC%97%E6%81%A9",
+      "wikiTitle": "弗恩"
     }
+  ],
+  "warnings": [
+    "手动补录角色 弗恩（Wiki 角色页，2026-05-21T05:23:40.273159+00:00）"
   ]
 }

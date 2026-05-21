@@ -54,7 +54,25 @@ cat > "$PKG/使用说明.txt" << 'EOF'
 ================================================================================
 EOF
 
-( cd "$TMP" && zip -r -q "$ROOT/$OUT_NAME" "大陆的霸者排轴工具" )
+( cd "$TMP" && ROOT="$ROOT" OUT_NAME="$OUT_NAME" python3 - <<'PY'
+import os
+import zipfile
+
+root = "大陆的霸者排轴工具"
+out = os.path.join(os.environ["ROOT"], os.environ["OUT_NAME"])
+
+with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames.sort()
+        rel_dir = os.path.relpath(dirpath, ".").replace(os.sep, "/")
+        if rel_dir != ".":
+            zf.writestr(rel_dir.rstrip("/") + "/", b"")
+        for name in sorted(filenames):
+            abs_path = os.path.join(dirpath, name)
+            rel_path = os.path.relpath(abs_path, ".").replace(os.sep, "/")
+            zf.write(abs_path, rel_path)
+PY
+)
 rm -rf "$TMP"
 
 echo "已生成: $ROOT/$OUT_NAME"
